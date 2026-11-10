@@ -113,6 +113,64 @@ private:
 
 } // namespace
 
+namespace {
+struct SavedTask {
+    uint32_t magic;          // 'CTWT'
+    uint32_t version;
+    char tid[17];
+    char bid[17];
+    uint8_t pad[6];
+    u64 pid;
+    SearchSettings ui;
+};
+constexpr uint32_t kTaskMagic = 0x54575443, kTaskVersion = 1;
+std::string taskPath()   { return std::string(kSearchDir) + "/task.bin"; }
+std::string enginePath() { return std::string(kSearchDir) + "/engine.bin"; }
+}
+
+void SearchTask::persist(const SearchSettings &ui) {
+    if (running_ || !g_engine.started()) return;
+    mkdirs(kSearchDir);
+    g_engine.setWorkDir(kSearchDir);
+    if (!g_engine.saveState(enginePath())) return;
+    SavedTask t{};
+    t.magic = kTaskMagic;
+    t.version = kTaskVersion;
+    std::snprintf(t.tid, sizeof(t.tid), "%s", session().tid().c_str());
+    std::snprintf(t.bid, sizeof(t.bid), "%s", session().bid().c_str());
+    t.pid = session().processId();
+    t.ui = ui;
+    if (FILE *f = std::fopen(taskPath().c_str(), "wb")) {
+        std::fwrite(&t, sizeof(t), 1, f);
+        std::fclose(f);
+    }
+}
+
+RestoreResult SearchTask::restore(SearchSettings &ui) {
+    if (running_ || g_engine.started() || !session().hasGame()) return RestoreResult::None;
+    SavedTask t{};
+    FILE *f = std::fopen(taskPath().c_str(), "rb");
+    if (!f) return RestoreResult::None;
+    const bool ok = std::fread(&t, sizeof(t), 1, f) == 1;
+    std::fclose(f);
+    if (!ok || t.magic != kTaskMagic || t.version != kTaskVersion) return RestoreResult::None;
+    t.tid[16] = t.bid[16] = '\0';
+    // 換了遊戲或版本：舊結果沒有意義
+    if (session().tid() != t.tid || session().bid() != t.bid) return RestoreResult::None;
+    g_engine.setWorkDir(kSearchDir);
+    if (!g_engine.loadState(enginePath())) return RestoreResult::None;
+    t.ui.value[sizeof(t.ui.value) - 1] = '\0';
+    ui = t.ui;
+    scope_ = ui.scope;
+    // 遊戲重開過（程序編號不同），位址多半已經變了
+    return t.pid == session().processId() ? RestoreResult::Restored : RestoreResult::RestoredStale;
+}
+
+void SearchTask::clearSaved() {
+    std::remove(taskPath().c_str());
+    std::remove(enginePath().c_str());
+}
+
 SearchTask &searchTask() {
     static SearchTask t;
     return t;
@@ -187,6 +245,7 @@ void SearchTask::reset() {
     mkdirs(kSearchDir);
     g_engine.setWorkDir(kSearchDir);
     g_engine.reset();
+    clearSaved();
     last_ = SearchResult::NotStarted;
 }
 

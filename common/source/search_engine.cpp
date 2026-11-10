@@ -247,6 +247,51 @@ SearchResult SearchEngine::nextScan(MemoryReader &mem, Cond cond, uint64_t value
     return SearchResult::Ok;
 }
 
+namespace {
+struct SavedEngine {
+    uint32_t magic;      // 'CTWS'
+    uint32_t version;
+    uint8_t type;
+    uint8_t slot;
+    uint8_t pad[6];
+    uint64_t count;
+};
+constexpr uint32_t kMagic = 0x53575443, kVersion = 1;
+}
+
+bool SearchEngine::saveState(const std::string &path) const {
+    if (!started_) { std::remove(path.c_str()); return true; }
+    SavedEngine st{kMagic, kVersion, (uint8_t)type_, (uint8_t)slot_, {}, count_};
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    const bool ok = std::fwrite(&st, sizeof(st), 1, f) == 1;
+    std::fclose(f);
+    return ok;
+}
+
+bool SearchEngine::loadState(const std::string &path) {
+    FILE *f = std::fopen(path.c_str(), "rb");
+    if (!f) return false;
+    SavedEngine st{};
+    const bool ok = std::fread(&st, sizeof(st), 1, f) == 1;
+    std::fclose(f);
+    if (!ok || st.magic != kMagic || st.version != kVersion || st.slot > 1 || st.type > (uint8_t)ValueType::F64) return false;
+
+    // 候選檔要還在，而且大小剛好是筆數 × 16 bytes
+    FILE *c = std::fopen(pathFor(st.slot).c_str(), "rb");
+    if (!c) return false;
+    std::fseek(c, 0, SEEK_END);
+    const long size = std::ftell(c);
+    std::fclose(c);
+    if (size < 0 || (uint64_t)size != st.count * sizeof(Candidate)) return false;
+
+    type_ = (ValueType)st.type;
+    slot_ = st.slot;
+    count_ = st.count;
+    started_ = true;
+    return true;
+}
+
 size_t SearchEngine::peek(Candidate *out, size_t max, uint64_t offset) {
     if (!started_ || offset >= count_) return 0;
     FILE *f = std::fopen(pathFor(slot_).c_str(), "rb");

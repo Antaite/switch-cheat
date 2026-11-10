@@ -13,8 +13,22 @@ namespace cheattw {
 //   All      全部可讀寫的記憶體（最慢，前兩個找不到時用）
 enum class SearchScope : u8 { Data, WithMain, All };
 
+// 畫面上的搜尋設定，跟著搜尋進度一起存檔
+struct SearchSettings {
+    ValueType type = ValueType::U32;
+    Cond cond = Cond::Equal;
+    char value[32] = "100";
+    SearchScope scope = SearchScope::Data;
+};
+
+enum class RestoreResult : u8 { None, Restored, RestoredStale };
+
 class SearchTask {
 public:
+    // 搜完存檔；打開進階搜尋時讀回來（同一個遊戲、同一個版本才會讀）
+    void persist(const SearchSettings &ui);
+    RestoreResult restore(SearchSettings &ui);
+    void clearSaved();
     // 開始搜尋（第一次或接著搜），立刻回傳；進度看 progress()
     // 失敗時 why 會填原因（中文）
     bool start(bool first, ValueType type, Cond cond, u64 valueBits, SearchScope scope, std::string *why = nullptr);

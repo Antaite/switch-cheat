@@ -114,6 +114,21 @@ int main() {
     assert(g_engine.nextScan(mem, Cond::Unchanged, 0, p) == SearchResult::Ok);
     assert(mem.reads == 1);
 
+    // 存檔後換一個新的引擎讀回來，要能接著搜（模擬 overlay 關掉再打開）
+    {
+        static SearchEngine fresh;
+        fresh.setWorkDir("/tmp");
+        assert(g_engine.saveState("/tmp/state.bin"));
+        assert(fresh.loadState("/tmp/state.bin"));
+        assert(fresh.started() && fresh.count() == 100 && fresh.type() == ValueType::U32);
+        mem.put32(0x20000000 + 0x100, 778);
+        assert(fresh.nextScan(mem, Cond::Increased, 0, p) == SearchResult::Ok);
+        assert(fresh.count() == 1);
+        // 候選檔被刪掉或大小對不上，就不能讀回來
+        fresh.reset();
+        assert(!fresh.loadState("/tmp/state.bin"));
+    }
+
     // 產生金手指碼：heap + 0x01A3F2C8 寫入 u32 999
     Cheat k = makeStaticWriteCheat("血量鎖定", 1, 0x01A3F2C8, ValueType::U32, 999);
     assert(k.opcodes.size() == 3 && k.opcodes[0] == 0x04100000 && k.opcodes[1] == 0x01A3F2C8 && k.opcodes[2] == 999);

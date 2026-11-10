@@ -77,6 +77,10 @@ public:
     bool started() const { return started_; }
     uint64_t count() const { return count_; }
     ValueType type() const { return type_; }
+    // 存檔／讀檔：overlay 關掉再打開後能接著搜尋。讀檔會確認候選檔還在、大小對得上
+    bool saveState(const std::string &path) const;
+    bool loadState(const std::string &path);
+
     // 讀出目前結果的第 offset 筆起、最多 max 筆（給畫面顯示用）
     size_t peek(Candidate *out, size_t max, uint64_t offset);
 

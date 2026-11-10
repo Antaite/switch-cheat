@@ -102,6 +102,7 @@ Result CheatSession::open() {
     if (newTid != tid_ || newBid != bid_) loadedGroup_.clear();   // 換遊戲了
     tid_ = newTid;
     bid_ = newBid;
+    pid_ = meta.process_id;
     ext_.mainBase = meta.main_nso_extents.base;   ext_.mainSize = meta.main_nso_extents.size;
     ext_.heapBase = meta.heap_extents.base;       ext_.heapSize = meta.heap_extents.size;
     ext_.aliasBase = meta.alias_extents.base;     ext_.aliasSize = meta.alias_extents.size;

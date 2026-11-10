@@ -53,6 +53,7 @@ public:
     // 線上碼庫下載的遊戲中文名（db/{TID}/title.txt），沒有就是空字串
     std::string gameTitle() const;
     const Extents &extents() const { return ext_; }
+    u64 processId() const { return pid_; }
 
     // 每次碼有變動就 +1，畫面看到數字變了才重畫，不用每幀重算
     u32 generation() const { return gen_; }
@@ -87,6 +88,7 @@ private:
     bool hasGame_ = false;
     std::string tid_, bid_;
     Extents ext_;
+    u64 pid_ = 0;
     std::vector<LiveCheat> cheats_;
     std::string loadedGroup_;
     Translator dict_;

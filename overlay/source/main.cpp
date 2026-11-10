@@ -306,17 +306,18 @@ private:
 };
 
 // ═══════════════ 進階搜尋：主畫面 ═══════════════
-struct SearchUiState {
-    ValueType type = ValueType::U32;
-    Cond cond = Cond::Equal;
-    std::string value = "100";
-    SearchScope scope = SearchScope::Data;
-};
-static SearchUiState g_ui;
+static SearchSettings g_ui;   // 數值存成 char[32]，可以直接存檔
 
 class GuiSearch : public tsl::Gui {
 public:
     tsl::elm::Element *createUI() override {
+        // overlay 關掉再打開：接回上次的搜尋進度
+        const RestoreResult rr = searchTask().restore(g_ui);
+        if (rr == RestoreResult::Restored)
+            setStatus("已接回上次的搜尋（" + std::to_string(searchTask().engine().count()) + " 筆），可以接著搜尋");
+        else if (rr == RestoreResult::RestoredStale)
+            setStatus("已接回上次的搜尋，但遊戲重開過，位址可能變了，建議「重新開始」", ui::Tone::Warn);
+
         auto frame = new tsl::elm::OverlayFrame("進階搜尋", "記憶體數值搜尋");
         auto list = new tsl::elm::List();
 
@@ -343,8 +344,8 @@ public:
         onA(value_, [this]() {
             if (!condNeedsValue(g_ui.cond)) return;
             const bool f = g_ui.type == ValueType::F32 || g_ui.type == ValueType::F64;
-            tsl::changeTo<GuiValueEdit>("搜尋數值", g_ui.value, f, [this](const std::string &s) {
-                g_ui.value = s;
+            tsl::changeTo<GuiValueEdit>("搜尋數值", std::string(g_ui.value), f, [this](const std::string &s) {
+                std::snprintf(g_ui.value, sizeof(g_ui.value), "%s", s.c_str());
                 refreshLabels();
             });
         });
@@ -399,6 +400,7 @@ public:
         }
         if (task.takeFinished()) {
             const SearchResult r = task.lastResult();
+            if (r == SearchResult::Ok) task.persist(g_ui);   // 存檔，退出再進來也能接著搜
             setStatus(r == SearchResult::Ok ? "找到 " + std::to_string(task.engine().count()) + " 筆（" + task.summary() + "）"
                                             : std::string(searchResultText(r)) + "（" + task.summary() + "）",
                       r == SearchResult::Ok ? ui::Tone::Ok : ui::Tone::Error);
@@ -411,7 +413,7 @@ private:
         auto &task = searchTask();
         if (task.running()) { task.cancel(); return; }
         u64 bits = 0;
-        if (condNeedsValue(g_ui.cond) && !parseValue(g_ui.type, g_ui.value, bits)) {
+        if (condNeedsValue(g_ui.cond) && !parseValue(g_ui.type, std::string(g_ui.value), bits)) {
             setStatus("數值格式不對", ui::Tone::Error);
             return;
         }
@@ -431,7 +433,7 @@ private:
         if (!started && condNeedsPrevious(g_ui.cond)) g_ui.cond = Cond::Equal;
         type_->setValue(valueTypeName(g_ui.type), started);
         cond_->setValue(condName(g_ui.cond));
-        value_->setValue(condNeedsValue(g_ui.cond) ? g_ui.value : "（這個方式不用數值）", !condNeedsValue(g_ui.cond));
+        value_->setValue(condNeedsValue(g_ui.cond) ? std::string(g_ui.value) : "（這個方式不用數值）", !condNeedsValue(g_ui.cond));
         static const char *scopeName[] = {"遊戲資料（建議）", "＋主程式", "全部記憶體"};
         scope_->setValue(scopeName[(int)g_ui.scope], started);
         action_->setText(task.running() ? "取消搜尋" : (started ? "接著搜尋" : "開始搜尋"));
