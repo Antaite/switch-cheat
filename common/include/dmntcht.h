@@ -49,6 +49,8 @@ Result dmntchtPauseCheatProcess(void);
 Result dmntchtResumeCheatProcess(void);
 
 // 記憶體（進階模式用）
+Result dmntchtGetCheatProcessMappingCount(u64 *out_count);
+Result dmntchtGetCheatProcessMappings(MemoryInfo *buffer, u64 max_count, u64 offset, u64 *out_count);
 Result dmntchtReadCheatProcessMemory(u64 address, void *buffer, size_t size);
 Result dmntchtWriteCheatProcessMemory(u64 address, const void *buffer, size_t size);
 Result dmntchtQueryCheatProcessMemory(MemoryInfo *out, u64 address);

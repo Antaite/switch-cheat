@@ -32,6 +32,16 @@ Result dmntchtForceOpenCheatProcess(void) { return serviceDispatch(&g_dmntchtSrv
 Result dmntchtPauseCheatProcess(void)     { return serviceDispatch(&g_dmntchtSrv, 65004); }
 Result dmntchtResumeCheatProcess(void)    { return serviceDispatch(&g_dmntchtSrv, 65005); }
 
+Result dmntchtGetCheatProcessMappingCount(u64 *out_count) {
+    return serviceDispatchOut(&g_dmntchtSrv, 65100, *out_count);
+}
+
+Result dmntchtGetCheatProcessMappings(MemoryInfo *buffer, u64 max_count, u64 offset, u64 *out_count) {
+    return serviceDispatchInOut(&g_dmntchtSrv, 65101, offset, *out_count,
+        .buffer_attrs = { SfBufferAttr_HipcMapAlias | SfBufferAttr_Out },
+        .buffers = { { buffer, max_count * sizeof(*buffer) } });
+}
+
 Result dmntchtReadCheatProcessMemory(u64 address, void *buffer, size_t size) {
     const struct { u64 address; u64 size; } in = { address, size };
     return serviceDispatchIn(&g_dmntchtSrv, 65102, in,

@@ -1,6 +1,7 @@
 #include "search_task.hpp"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include "cheat_session.hpp"
 #include "dmntcht.h"
 
@@ -11,15 +12,22 @@ namespace {
 // 引擎約 144KB，一定要放全域，不能放 stack（背景執行緒 stack 只有 16KB）
 SearchEngine g_engine;
 
+// 診斷資訊：寫進 search.log
+char g_diag[512];
+
 class DmntReader : public MemoryReader {
 public:
     explicit DmntReader(SearchScope s) : scope_(s) {}
 
     size_t regions(Region *out, size_t max) override {
         const auto &e = session().extents();
-        size_t n = 0;
-        if (scope_ == SearchScope::MainAndHeap) n = collect(e.mainBase, e.mainSize, out, n, max);
-        n = collect(e.heapBase, e.heapSize, out, n, max);
+        g_diag[0] = '\0';
+        // 方法一（EdiZon 用的）：跟 dmnt 要整份記憶體對照表，再挑出 heap／主程式範圍內可讀寫的
+        size_t n = fromMappings(e, out, max);
+        if (n > 0) return n;
+        // 方法二（備援）：從 heap 起點一段一段查詢
+        if (scope_ == SearchScope::MainAndHeap) n = fromQuery(e.mainBase, e.mainSize, out, n, max);
+        n = fromQuery(e.heapBase, e.heapSize, out, n, max);
         return n;
     }
 
@@ -28,22 +36,62 @@ public:
     }
 
 private:
+    static bool usable(const MemoryInfo &mi) {
+        return (mi.perm & Perm_Rw) == Perm_Rw && mi.type != MemType_Unmapped &&
+               mi.type != MemType_Io && mi.type != MemType_Reserved;
+    }
+
+    bool inScope(const Extents &e, u64 addr) const {
+        if (addr >= e.heapBase && addr < e.heapBase + e.heapSize) return true;
+        return scope_ == SearchScope::MainAndHeap && addr >= e.mainBase && addr < e.mainBase + e.mainSize;
+    }
+
+    static void add(Region *out, size_t &n, size_t max, u64 base, u64 size) {
+        if (n > 0 && out[n - 1].base + out[n - 1].size == base) { out[n - 1].size += size; return; }   // 相鄰的合併
+        if (n < max) out[n++] = {base, size};
+    }
+
+    size_t fromMappings(const Extents &e, Region *out, size_t max) {
+        u64 total = 0;
+        Result rc = dmntchtGetCheatProcessMappingCount(&total);
+        size_t n = 0, kept = 0;
+        static MemoryInfo batch[32];   // 一次拿 32 筆（1.25KB），放全域不佔 stack
+        u64 offset = 0;
+        while (R_SUCCEEDED(rc) && offset < total) {
+            u64 got = 0;
+            rc = dmntchtGetCheatProcessMappings(batch, 32, offset, &got);
+            if (R_FAILED(rc) || got == 0) break;
+            for (u64 i = 0; i < got; ++i) {
+                const MemoryInfo &mi = batch[i];
+                if (!usable(mi) || !inScope(e, mi.addr)) continue;
+                add(out, n, max, mi.addr, mi.size);
+                ++kept;
+            }
+            offset += got;
+        }
+        std::snprintf(g_diag, sizeof(g_diag), "mappings rc=%x total=%llu kept=%zu regions=%zu",
+                      rc, (unsigned long long)total, kept, n);
+        return n;
+    }
+
     // 只收可讀寫、有對應實體記憶體的區段
-    static size_t collect(u64 base, u64 size, Region *out, size_t n, size_t max) {
+    static size_t fromQuery(u64 base, u64 size, Region *out, size_t n, size_t max) {
         const u64 end = base + size;
         u64 addr = base;
+        int logged = 0;
         while (addr < end && n < max) {
             MemoryInfo mi{};
-            if (R_FAILED(dmntchtQueryCheatProcessMemory(&mi, addr)) || mi.size == 0) break;
+            const Result rc = dmntchtQueryCheatProcessMemory(&mi, addr);
+            if (logged < 3) {   // 前三筆寫進診斷，方便看是查詢失敗還是被篩掉
+                const size_t len = std::strlen(g_diag);
+                std::snprintf(g_diag + len, sizeof(g_diag) - len, " | query@%llx rc=%x addr=%llx size=%llx type=%x perm=%x",
+                              (unsigned long long)addr, rc, (unsigned long long)mi.addr, (unsigned long long)mi.size, mi.type, mi.perm);
+                ++logged;
+            }
+            if (R_FAILED(rc) || mi.size == 0) break;
             const u64 rs = std::max<u64>(mi.addr, base);
             const u64 re = std::min<u64>(mi.addr + mi.size, end);
-            const bool usable = (mi.perm & Perm_Rw) == Perm_Rw && mi.type != MemType_Unmapped &&
-                                mi.type != MemType_Io && mi.type != MemType_Reserved;
-            if (usable && re > rs) {
-                // 相鄰的區段合併，減少區段數
-                if (n > 0 && out[n - 1].base + out[n - 1].size == rs) out[n - 1].size += re - rs;
-                else out[n++] = {rs, re - rs};
-            }
+            if (usable(mi) && re > rs) add(out, n, max, rs, re - rs);
             const u64 next = mi.addr + mi.size;
             if (next <= addr) break;   // 防止無窮迴圈
             addr = next;
@@ -107,14 +155,16 @@ void SearchTask::threadMain(void *arg) {
     // 記錄：狀態條顯示一行摘要，詳細寫到 switch/CheatTW/search.log
     const u64 sec = (armTicksToNs(armGetSystemTick()) - t0) / 1000000000ull;
     const u64 mb = self->first_ ? self->progress_.total.load() / (1024 * 1024) : 0;
-    if (self->first_) std::snprintf(self->summary_, sizeof(self->summary_), "掃描 %llu MB，花 %llu 秒", (unsigned long long)mb, (unsigned long long)sec);
+    if (self->last_ == SearchResult::NoRegions) std::snprintf(self->summary_, sizeof(self->summary_), "%s", g_diag);
+    else if (self->first_) std::snprintf(self->summary_, sizeof(self->summary_), "掃描 %llu MB，花 %llu 秒", (unsigned long long)mb, (unsigned long long)sec);
     else std::snprintf(self->summary_, sizeof(self->summary_), "比對 %llu 筆，花 %llu 秒", (unsigned long long)self->progress_.total.load(), (unsigned long long)sec);
     if (FILE *f = std::fopen((std::string(kAppDir) + "/search.log").c_str(), "a")) {
         const auto &e = session().extents();
-        std::fprintf(f, "%s type=%d cond=%d value=%llu heap=%llx+%llx 結果=%s 筆數=%llu %s\n",
+        std::fprintf(f, "%s type=%d cond=%d value=%llu heap=%llx+%llx main=%llx+%llx 結果=%s 筆數=%llu %s\n  診斷：%s\n",
                      self->first_ ? "第一次" : "接著搜", (int)self->type_, (int)self->cond_,
                      (unsigned long long)self->value_, (unsigned long long)e.heapBase, (unsigned long long)e.heapSize,
-                     searchResultText(self->last_), (unsigned long long)g_engine.count(), self->summary_);
+                     (unsigned long long)e.mainBase, (unsigned long long)e.mainSize,
+                     searchResultText(self->last_), (unsigned long long)g_engine.count(), self->summary_, g_diag);
         std::fclose(f);
     }
 
