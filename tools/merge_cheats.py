@@ -473,6 +473,9 @@ def main(argv=None) -> int:
     # 每款遊戲一份詳細索引，App 只下載正在玩的那款，總索引保持很小
     for tid, detail in per_title.items():
         (db / tid / "index.json").write_text(json.dumps(detail, ensure_ascii=False), encoding="utf-8")
+        # 版本清單（BID<TAB>條數），主機用來找「其他版本的碼」做跨版本移植
+        (db / tid / "builds.txt").write_text(
+            "".join(f"{bid}\t{files[0]['count']}\n" for bid, files in sorted(detail.items())), encoding="utf-8")
 
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "index.json").write_text(json.dumps(index, ensure_ascii=False, separators=(",", ":")),

@@ -19,6 +19,8 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -I../include test_core.cpp ../source/cheat_core.cpp -o test_core && ./test_core ../../data/translations/zh_TW.tsv
           g++ -std=c++17 -Wall -I../include test_search.cpp ../source/search_engine.cpp ../source/cheat_core.cpp -o test_search && ./test_search
+          g++ -std=c++17 -Wall -I../include test_pointer.cpp ../source/pointer_search.cpp ../source/search_engine.cpp ../source/cheat_core.cpp -o test_pointer && ./test_pointer
+          g++ -std=c++17 -Wall -I../include test_porter.cpp ../source/porter.cpp ../source/search_engine.cpp ../source/cheat_core.cpp -o test_porter && ./test_porter
       - name: 合併工具測試
         working-directory: tools
         run: python3 -m unittest tests/test_merge.py

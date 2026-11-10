@@ -98,6 +98,10 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(tr.translate("无限金钱")[0], "無限金錢")
         self.assertEqual(tr.translate("Higher Attack")[0], "攻擊力提高")
 
+    def test_builds_list(self):
+        lines = (self.dist / "db" / T / "builds.txt").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines, [f"{B}\t5"])
+
     def test_title_file(self):
         self.assertEqual((self.dist / "db" / E / "title.txt").read_text(encoding="utf-8").strip(), "範例遊戲丙（titledb）")
 

@@ -15,6 +15,8 @@ public:
 
     // 開始下載這個遊戲版本（已經在下載就忽略）
     bool start(const std::string &tid, const std::string &bid);
+    // 下載同一款遊戲「其他版本」的碼到 db/{TID}/other/（跨版本移植用）
+    bool startOthers(const std::string &tid, const std::string &bid);
     State state() const { return state_; }
     bool running() const { return state_ == State::Running; }
     // 狀態從 Running 變成結束後，第一次呼叫回傳 true（畫面用來更新一次）
@@ -31,6 +33,9 @@ public:
 private:
     static void threadMain(void *arg);
     void run();
+    void runOthers();
+    bool beginNetwork();
+    bool others_ = false;
     void setStage(const char *text);
     void fail(const char *what, Result rc);
     void cleanup();

@@ -151,6 +151,12 @@ void Downloader::cleanup() {
     if (g_log) { std::fclose(g_log); g_log = nullptr; }
 }
 
+bool Downloader::startOthers(const std::string &tid, const std::string &bid) {
+    others_ = true;
+    if (!start(tid, bid)) { others_ = false; return false; }
+    return true;
+}
+
 bool Downloader::start(const std::string &tid, const std::string &bid) {
     if (state_ == State::Running) return false;
     if (threadValid_) { threadWaitForExit(&thread_); threadClose(&thread_); threadValid_ = false; }
@@ -174,31 +180,78 @@ bool Downloader::start(const std::string &tid, const std::string &bid) {
 
 void Downloader::threadMain(void *arg) {
     auto *self = static_cast<Downloader *>(arg);
-    self->run();
+    if (self->others_) self->runOthers();
+    else self->run();
+    self->others_ = false;
     self->finished_ = true;
 }
 
-void Downloader::run() {
+bool Downloader::beginNetwork() {
     mkdirs(kAppDir);
     g_log = std::fopen((std::string(kAppDir) + "/download.log").c_str(), "w");
-    logf("CheatTW 下載記錄  TID %s  BID %s", tid_.c_str(), bid_.c_str());
+    logf("CheatTW 下載記錄  TID %s  BID %s%s", tid_.c_str(), bid_.c_str(), others_ ? "（其他版本）" : "");
 
     // curl 的 SSL 是用系統的 ssl 服務，初始化和每次連線都要跟 sm 拿服務，
     // 所以整個下載期間都要開著 sm（libtesla 平常是關著的）
     setStage("初始化網路…");
     Result rc = smInitialize();
-    if (R_FAILED(rc)) { fail("系統服務無法使用", rc); return; }
+    if (R_FAILED(rc)) { fail("系統服務無法使用", rc); return false; }
     rc = socketInitialize(&kSocketConfig);
-    if (R_FAILED(rc)) { smExit(); fail("網路初始化失敗", rc); return; }
+    if (R_FAILED(rc)) { smExit(); fail("網路初始化失敗", rc); return false; }
     const CURLcode grc = curl_global_init(CURL_GLOBAL_DEFAULT);
     logf("curl_global_init=%d", (int)grc);
     if (grc != CURLE_OK) {
         socketExit();
         smExit();
         fail("SSL 初始化失敗", 0);
-        return;
+        return false;
     }
     finishCleanup_ = true;
+    return true;
+}
+
+void Downloader::runOthers() {
+    if (!beginNetwork()) return;
+    const std::string base = baseUrl() + "db/" + tid_ + "/";
+    const std::string dir = std::string(kDbDir) + "/" + tid_;
+    mkdirs(dir + "/other");
+
+    setStage("讀取版本清單…");
+    std::string err;
+    const long http = fetch(base + "builds.txt", dir + "/builds.txt", &err);
+    if (http != 200) {
+        if (http == 404) std::snprintf(message_, sizeof(message_), "線上碼庫沒有這款遊戲");
+        else if (http == 0) std::snprintf(message_, sizeof(message_), "連線失敗：%s", err.empty() ? "請確認已連上 Wi-Fi" : err.c_str());
+        else std::snprintf(message_, sizeof(message_), "下載失敗（HTTP %ld）", http);
+        cleanup();
+        state_ = http == 404 ? State::NotFound : State::Failed;
+        return;
+    }
+    std::vector<std::string> bids;
+    if (FILE *f = std::fopen((dir + "/builds.txt").c_str(), "r")) {
+        char line[128];
+        while (std::fgets(line, sizeof(line), f)) {
+            std::string b(line, strcspn(line, "\t\r\n"));
+            if (b.size() == 16 && b != bid_) bids.push_back(b);
+        }
+        std::fclose(f);
+    }
+    int ok = 0;
+    for (size_t i = 0; i < bids.size(); ++i) {
+        char st[64];
+        std::snprintf(st, sizeof(st), "下載其他版本 %zu / %zu", i + 1, bids.size());
+        setStage(st);
+        if (fetch(base + bids[i] + ".txt", dir + "/other/" + bids[i] + ".txt") == 200) ++ok;
+        filesDone_ = ok;
+    }
+    if (bids.empty()) std::snprintf(message_, sizeof(message_), "線上碼庫只有你這個版本，沒有其他版本可以移植");
+    else std::snprintf(message_, sizeof(message_), "已下載 %d 個其他版本的碼", ok);
+    cleanup();
+    state_ = ok > 0 ? State::Done : (bids.empty() ? State::NotFound : State::Failed);
+}
+
+void Downloader::run() {
+    if (!beginNetwork()) return;
 
     const std::string base = baseUrl() + "db/" + tid_ + "/";
     const std::string dir = std::string(kDbDir) + "/" + tid_;

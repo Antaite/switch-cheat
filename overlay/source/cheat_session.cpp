@@ -317,7 +317,7 @@ Result CheatSession::addOwnCheat(const Cheat &c, bool enabled, std::string &outM
         std::fclose(f);
     }
     refresh();
-    outMessage = "已加入並開啟";
+    outMessage = enabled ? "已加入並開啟" : "已加入（關閉中，請到首頁開啟）";
     return 0;
 }
 
