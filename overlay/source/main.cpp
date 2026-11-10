@@ -645,12 +645,16 @@ private:
 
 class CheatOverlay : public tsl::Overlay {
 public:
-    void initServices() override {}
+    // libtesla 平常不會掛載 SD 卡（只在它自己讀設定時短暫掛載），
+    // 所以我們要自己在啟動時掛載、結束時卸載；沒掛載時呼叫 mkdir 會直接當機
+    void initServices() override { fsdevMountSdmc(); }
     void exitServices() override {
         if (searchTask().running()) searchTask().cancel();
+        searchTask().join();
         downloader().join();
         session().setKeepAlive(false);
         session().close();
+        fsdevUnmountDevice("sdmc");
     }
 
     // 顯示時才佔用 dmnt session，隱藏時馬上放掉，避免跟 Breeze／EdiZon-SE 搶

@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
+#include <sys/iosupport.h>
 #include <sys/stat.h>
 
 namespace cheattw {
@@ -18,6 +19,8 @@ bool fileExists(const std::string &p) {
 }
 
 void mkdirs(const std::string &path) {
+    // SD 卡沒掛載時 newlib 會呼叫到空的函式指標而當機，先確認裝置存在
+    if (FindDevice("sdmc:") < 0) return;
     for (size_t i = std::strlen("sdmc:/"); i < path.size(); ++i)
         if (path[i] == '/') mkdir(path.substr(0, i).c_str(), 0777);
     mkdir(path.c_str(), 0777);

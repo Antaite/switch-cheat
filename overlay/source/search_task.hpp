@@ -14,6 +14,8 @@ public:
     // 開始搜尋（第一次或接著搜），立刻回傳；進度看 progress()
     bool start(bool first, ValueType type, Cond cond, u64 valueBits, SearchScope scope);
     void cancel() { progress_.cancel = true; }
+    // overlay 結束前呼叫：等背景搜尋結束
+    void join() { if (threadValid_) { threadWaitForExit(&thread_); threadClose(&thread_); threadValid_ = false; } }
     void reset();
 
     bool running() const { return running_; }
