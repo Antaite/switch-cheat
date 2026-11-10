@@ -295,7 +295,7 @@ public:
         if (n == 0) list->addItem(new tsl::elm::ListItem("沒有結果"));
         const bool tooMany = eng.count() > kShow;
         frame->setContent(new ui::SplitView(list, new ui::HelpBox([tooMany]() {
-            return std::string("每一列是一個位址和它現在的值。H+ 開頭在 Heap，M+ 開頭在主程式。按 A 選擇要鎖定或修改。") +
+            return std::string("每一列是一個位址和它現在的值。開頭代表記憶體區：H Heap、A Alias、M 主程式、R 其他。按 A 選擇要鎖定或修改。") +
                    (tooMany ? "\n結果還很多，建議回上一頁，在遊戲裡讓數值變化後再搜一次。" : "");
         }), 170));
         return frame;
@@ -310,7 +310,7 @@ struct SearchUiState {
     ValueType type = ValueType::U32;
     Cond cond = Cond::Equal;
     std::string value = "100";
-    SearchScope scope = SearchScope::Heap;
+    SearchScope scope = SearchScope::Data;
 };
 static SearchUiState g_ui;
 
@@ -353,7 +353,7 @@ public:
         scope_ = new tsl::elm::ListItem("範圍", "");
         onA(scope_, [this]() {
             if (searchTask().engine().started()) return;
-            g_ui.scope = g_ui.scope == SearchScope::Heap ? SearchScope::MainAndHeap : SearchScope::Heap;
+            g_ui.scope = (SearchScope)(((int)g_ui.scope + 1) % 3);
             refreshLabels();
         });
         list->addItem(scope_);
@@ -432,7 +432,8 @@ private:
         type_->setValue(valueTypeName(g_ui.type), started);
         cond_->setValue(condName(g_ui.cond));
         value_->setValue(condNeedsValue(g_ui.cond) ? g_ui.value : "（這個方式不用數值）", !condNeedsValue(g_ui.cond));
-        scope_->setValue(g_ui.scope == SearchScope::Heap ? "Heap（一般建議）" : "主程式 + Heap", started);
+        static const char *scopeName[] = {"遊戲資料（建議）", "＋主程式", "全部記憶體"};
+        scope_->setValue(scopeName[(int)g_ui.scope], started);
         action_->setText(task.running() ? "取消搜尋" : (started ? "接著搜尋" : "開始搜尋"));
         results_->setValue(started ? std::to_string(task.engine().count()) + " 筆" : "—");
         if (statusText_.empty())
@@ -475,9 +476,14 @@ private:
                 ? "數值：輸入遊戲畫面上看到的數字。按 A 開啟數字鍵盤，可以直接輸入任何數字。"
                 : "數值：目前的比較方式是跟上次比，不用輸入數值。";
         if (f == scope_)
-            return g_ui.scope == SearchScope::Heap
-                ? "範圍：按 A 切換。\n目前：Heap，遊戲執行時的資料區，血量、金錢幾乎都在這裡，搜尋比較快。"
-                : "範圍：按 A 切換。\n目前：主程式＋Heap，連主程式的固定資料也搜，比較慢。Heap 找不到時再用。";
+        {
+            static const char *desc[] = {
+                "遊戲資料（Heap＋Alias）：遊戲執行時存放資料的地方，血量、金錢幾乎都在這裡。大部分情況用這個。",
+                "再加上主程式的資料段：少數遊戲把數值放在主程式裡，遊戲資料找不到時再試。",
+                "全部可讀寫的記憶體：最完整但最慢，前兩個都找不到時才用。",
+            };
+            return std::string("範圍：按 A 切換。第一次搜尋後就不能改。\n目前：") + desc[(int)g_ui.scope];
+        }
         if (f == action_)
             return searchTask().running()
                 ? "取消搜尋：停止目前的搜尋，上一次的結果會保留。"

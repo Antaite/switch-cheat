@@ -26,8 +26,9 @@ public:
         size_t n = fromMappings(e, out, max);
         if (n > 0) return n;
         // 方法二（備援）：從 heap 起點一段一段查詢
-        if (scope_ == SearchScope::MainAndHeap) n = fromQuery(e.mainBase, e.mainSize, out, n, max);
+        if (scope_ == SearchScope::WithMain) n = fromQuery(e.mainBase, e.mainSize, out, n, max);
         n = fromQuery(e.heapBase, e.heapSize, out, n, max);
+        n = fromQuery(e.aliasBase, e.aliasSize, out, n, max);
         return n;
     }
 
@@ -41,9 +42,12 @@ private:
                mi.type != MemType_Io && mi.type != MemType_Reserved;
     }
 
+    static bool within(u64 addr, u64 base, u64 size) { return size && addr >= base && addr < base + size; }
+
     bool inScope(const Extents &e, u64 addr) const {
-        if (addr >= e.heapBase && addr < e.heapBase + e.heapSize) return true;
-        return scope_ == SearchScope::MainAndHeap && addr >= e.mainBase && addr < e.mainBase + e.mainSize;
+        if (scope_ == SearchScope::All) return true;
+        if (within(addr, e.heapBase, e.heapSize) || within(addr, e.aliasBase, e.aliasSize)) return true;
+        return scope_ == SearchScope::WithMain && within(addr, e.mainBase, e.mainSize);
     }
 
     static void add(Region *out, size_t &n, size_t max, u64 base, u64 size) {
@@ -54,7 +58,7 @@ private:
     size_t fromMappings(const Extents &e, Region *out, size_t max) {
         u64 total = 0;
         Result rc = dmntchtGetCheatProcessMappingCount(&total);
-        size_t n = 0, kept = 0;
+        size_t n = 0, kept = 0, rw = 0, inHeap = 0, inAlias = 0;
         static MemoryInfo batch[32];   // 一次拿 32 筆（1.25KB），放全域不佔 stack
         u64 offset = 0;
         while (R_SUCCEEDED(rc) && offset < total) {
@@ -63,14 +67,19 @@ private:
             if (R_FAILED(rc) || got == 0) break;
             for (u64 i = 0; i < got; ++i) {
                 const MemoryInfo &mi = batch[i];
+                if (usable(mi)) {
+                    ++rw;
+                    if (within(mi.addr, e.heapBase, e.heapSize)) ++inHeap;
+                    if (within(mi.addr, e.aliasBase, e.aliasSize)) ++inAlias;
+                }
                 if (!usable(mi) || !inScope(e, mi.addr)) continue;
                 add(out, n, max, mi.addr, mi.size);
                 ++kept;
             }
             offset += got;
         }
-        std::snprintf(g_diag, sizeof(g_diag), "mappings rc=%x total=%llu kept=%zu regions=%zu",
-                      rc, (unsigned long long)total, kept, n);
+        std::snprintf(g_diag, sizeof(g_diag), "共 %llu 段，可寫 %zu（heap %zu、alias %zu），採用 %zu rc=%x",
+                      (unsigned long long)total, rw, inHeap, inAlias, kept, rc);
         return n;
     }
 
@@ -190,6 +199,12 @@ bool SearchTask::locate(u64 addr, u8 &regionType, u64 &offset, std::string &labe
     } else if (addr >= e.mainBase && addr < e.mainBase + e.mainSize) {
         regionType = 0; offset = addr - e.mainBase;
         std::snprintf(buf, sizeof(buf), "M+0x%010llX", (unsigned long long)offset);
+    } else if (e.aliasSize && addr >= e.aliasBase && addr < e.aliasBase + e.aliasSize) {
+        regionType = 2; offset = addr - e.aliasBase;
+        std::snprintf(buf, sizeof(buf), "A+0x%010llX", (unsigned long long)offset);
+    } else if (e.spaceSize && addr >= e.spaceBase && addr < e.spaceBase + e.spaceSize) {
+        regionType = 3; offset = addr - e.spaceBase;
+        std::snprintf(buf, sizeof(buf), "R+0x%010llX", (unsigned long long)offset);
     } else {
         return false;
     }

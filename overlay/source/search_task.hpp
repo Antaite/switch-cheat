@@ -7,7 +7,11 @@
 
 namespace cheattw {
 
-enum class SearchScope : u8 { Heap, MainAndHeap };
+// 搜尋範圍：
+//   Data     遊戲資料區 = Heap + Alias（很多新遊戲的資料放在 Alias 區，不在 Heap）
+//   WithMain 再加上主程式的資料段
+//   All      全部可讀寫的記憶體（最慢，前兩個找不到時用）
+enum class SearchScope : u8 { Data, WithMain, All };
 
 class SearchTask {
 public:
@@ -45,7 +49,7 @@ private:
     ValueType type_ = ValueType::U32;
     Cond cond_ = Cond::Equal;
     u64 value_ = 0;
-    SearchScope scope_ = SearchScope::Heap;
+    SearchScope scope_ = SearchScope::Data;
     char summary_[160] = {};
 };
 
