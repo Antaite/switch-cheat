@@ -12,7 +12,10 @@ enum class SearchScope : u8 { Heap, MainAndHeap };
 class SearchTask {
 public:
     // 開始搜尋（第一次或接著搜），立刻回傳；進度看 progress()
-    bool start(bool first, ValueType type, Cond cond, u64 valueBits, SearchScope scope);
+    // 失敗時 why 會填原因（中文）
+    bool start(bool first, ValueType type, Cond cond, u64 valueBits, SearchScope scope, std::string *why = nullptr);
+    // 搜完的補充說明（區段數、掃了多少、花幾秒），顯示在狀態條
+    std::string summary() const { return summary_; }
     void cancel() { progress_.cancel = true; }
     // overlay 結束前呼叫：等背景搜尋結束
     void join() { if (threadValid_) { threadWaitForExit(&thread_); threadClose(&thread_); threadValid_ = false; } }
@@ -43,6 +46,7 @@ private:
     Cond cond_ = Cond::Equal;
     u64 value_ = 0;
     SearchScope scope_ = SearchScope::Heap;
+    char summary_[160] = {};
 };
 
 SearchTask &searchTask();

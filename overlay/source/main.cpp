@@ -391,12 +391,16 @@ public:
             const u64 total = task.progress().total;
             const u64 done = task.progress().done;
             const int pct = total ? (int)(done * 100 / total) : 0;
-            setStatus("搜尋中 " + std::to_string(pct) + "%（可以按「取消搜尋」）", ui::Tone::Warn);
+            // 第一次搜尋顯示掃了多少 MB，讓使用者知道有在跑
+            std::string detail = task.engine().started()
+                ? std::to_string(done) + " / " + std::to_string(total) + " 筆"
+                : std::to_string(done >> 20) + " / " + std::to_string(total >> 20) + " MB";
+            setStatus("搜尋中 " + std::to_string(pct) + "%（" + detail + "）", ui::Tone::Warn);
         }
         if (task.takeFinished()) {
             const SearchResult r = task.lastResult();
-            setStatus(r == SearchResult::Ok ? "完成，找到 " + std::to_string(task.engine().count()) + " 筆"
-                                            : std::string(searchResultText(r)),
+            setStatus(r == SearchResult::Ok ? "找到 " + std::to_string(task.engine().count()) + " 筆（" + task.summary() + "）"
+                                            : std::string(searchResultText(r)) + "（" + task.summary() + "）",
                       r == SearchResult::Ok ? ui::Tone::Ok : ui::Tone::Error);
             refreshLabels();
         }
@@ -412,8 +416,9 @@ private:
             return;
         }
         const bool first = !task.engine().started();
-        if (!task.start(first, g_ui.type, g_ui.cond, bits, g_ui.scope)) {
-            setStatus("無法開始（沒有遊戲？）", ui::Tone::Error);
+        std::string why;
+        if (!task.start(first, g_ui.type, g_ui.cond, bits, g_ui.scope, &why)) {
+            setStatus("無法開始：" + why, ui::Tone::Error);
             return;
         }
         setStatus("搜尋中 0%", ui::Tone::Warn);

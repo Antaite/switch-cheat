@@ -49,6 +49,25 @@ inline void pillText(Renderer *r, s32 x, s32 y, s32 w, s32 h, const std::string 
     r->drawString(s.c_str(), false, x + (w - tw) / 2, y + h / 2 + (s32)(size * 0.38f), size, a(fg));
 }
 
+// 一個字一個字量寬度換行（中文沒有空白，不能用空白斷行）
+inline std::vector<std::string> wrapText(Renderer *r, const std::string &text, s32 maxW, float size) {
+    std::vector<std::string> out;
+    std::string line;
+    size_t i = 0;
+    while (i < text.size()) {
+        size_t n = 1;
+        const unsigned char c = (unsigned char)text[i];
+        if (c >= 0xF0) n = 4; else if (c >= 0xE0) n = 3; else if (c >= 0xC0) n = 2;
+        const std::string ch = text.substr(i, n);
+        i += n;
+        if (ch == "\n") { out.push_back(line); line.clear(); continue; }
+        if (!line.empty() && (s32)textWidth(r, line + ch, size) > maxW) { out.push_back(line); line.clear(); }
+        line += ch;
+    }
+    if (!line.empty()) out.push_back(line);
+    return out;
+}
+
 // ───────── 狀態條（不可選取） ─────────
 enum class Tone { Ok, Warn, Error };
 
@@ -68,13 +87,24 @@ public:
         const s32 x = getX() + 4, y = getY() + 8, w = getWidth() - 8, h = getHeight() - 16;
         r->drawRect(x, y, w, h, a(bg));
         r->drawCircle(x + 18, y + h / 2, 6, true, a(dot));
-        const std::string shown = r->limitStringLength(text, false, 18, w - 44);
-        r->drawString(shown.c_str(), false, x + 34, y + h / 2 + 7, 18, a(fg));
+        if (text != cacheText_) {   // 最多兩行，換行結果快取
+            cacheText_ = text;
+            lines_ = wrapText(r, text, w - 44, 17);
+            if (lines_.size() > 2) { lines_.resize(2); lines_[1] = r->limitStringLength(lines_[1] + "…", false, 17, w - 44); }
+        }
+        if (lines_.size() <= 1) {
+            r->drawString(lines_.empty() ? "" : lines_[0].c_str(), false, x + 34, y + h / 2 + 7, 17, a(fg));
+        } else {
+            r->drawString(lines_[0].c_str(), false, x + 34, y + h / 2 - 5, 17, a(fg));
+            r->drawString(lines_[1].c_str(), false, x + 34, y + h / 2 + 19, 17, a(fg));
+        }
     }
-    void layout(u16, u16, u16, u16) override { setBoundaries(getX(), getY(), getWidth(), 58); }
+    void layout(u16, u16, u16, u16) override { setBoundaries(getX(), getY(), getWidth(), 76); }
 
 private:
     Provider provider_;
+    std::string cacheText_;
+    std::vector<std::string> lines_;
 };
 
 // ───────── 分類膠囊（←→ 切換） ─────────
@@ -312,7 +342,7 @@ public:
         if (text != cacheText_ || getWidth() != cacheWidth_) {   // 換行結果快取，文字沒變就不重算
             cacheText_ = text;
             cacheWidth_ = getWidth();
-            lines_ = wrap(r, text, getWidth() - 28, kFont);
+            lines_ = wrapText(r, text, getWidth() - 28, kFont);
         }
         r->drawRect(getX(), getY() + 6, getWidth(), 1, a(kLine));
         r->drawString("說明", false, getX() + 4, getY() + 28, 15, a(kAccent));
@@ -329,25 +359,6 @@ public:
 private:
     static constexpr float kFont = 17;
     static constexpr s32 kLineH = 24;
-
-    // 一個字一個字量寬度，超過就換行（中文沒有空白，不能用空白斷行）
-    static std::vector<std::string> wrap(Renderer *r, const std::string &text, s32 maxW, float size) {
-        std::vector<std::string> out;
-        std::string line;
-        size_t i = 0;
-        while (i < text.size()) {
-            size_t n = 1;
-            const unsigned char c = (unsigned char)text[i];
-            if (c >= 0xF0) n = 4; else if (c >= 0xE0) n = 3; else if (c >= 0xC0) n = 2;
-            const std::string ch = text.substr(i, n);
-            i += n;
-            if (ch == "\n") { out.push_back(line); line.clear(); continue; }
-            if (!line.empty() && (s32)textWidth(r, line + ch, size) > maxW) { out.push_back(line); line.clear(); }
-            line += ch;
-        }
-        if (!line.empty()) out.push_back(line);
-        return out;
-    }
 
     Provider provider_;
     std::string cacheText_;

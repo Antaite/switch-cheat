@@ -46,7 +46,7 @@ const char *searchResultText(SearchResult r) {
     switch (r) {
         case SearchResult::Ok:         return "完成";
         case SearchResult::Cancelled:  return "已取消";
-        case SearchResult::TooMany:    return "結果太多，請換一個比較特別的數值";
+        case SearchResult::TooMany:    return "結果超過 200 萬筆，這個數值太常見。請換一個比較少見的數值（例如金錢 12345 比 100 好找）";
         case SearchResult::IoError:    return "SD 卡讀寫失敗";
         case SearchResult::NoRegions:  return "讀不到遊戲記憶體";
         case SearchResult::NotStarted: return "請先做第一次搜尋";
