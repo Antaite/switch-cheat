@@ -1,6 +1,7 @@
 // 自訂畫面元件：照示意圖的風格（狀態條、分類膠囊、雙行金手指 + 開關膠囊）
 #pragma once
 #include <tesla.hpp>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <vector>
@@ -190,6 +191,114 @@ private:
     Query query_;
     Toggle toggle_;
     std::string cacheZh_, shownZh_, shownEn_;
+};
+
+// ───────── 數字鍵盤（十字鍵選鍵 + A 輸入，或直接用手指點） ─────────
+class Keypad : public tsl::elm::Element {
+public:
+    using Done = std::function<void(const std::string &)>;
+
+    Keypad(std::string initial, bool allowFloat, Done done)
+        : text_(initial.empty() ? "0" : std::move(initial)), allowFloat_(allowFloat), done_(std::move(done)) {}
+
+    void draw(Renderer *r) override {
+        // 輸入框
+        const s32 boxH = 74;
+        r->drawRect(getX(), getY(), getWidth(), boxH, a(kPillOff));
+        const std::string shown = text_ + "_";
+        const s32 tw = (s32)textWidth(r, shown, 40);
+        r->drawString(shown.c_str(), false, getX() + getWidth() - tw - 16, getY() + 53, 40, a(kText));
+        r->drawString(allowFloat_ ? "可輸入小數" : "整數", false, getX() + 10, getY() + 22, 14, a(kSub));
+
+        // 按鍵 4 × 4
+        const s32 gap = 8, top = getY() + boxH + 16;
+        keyW_ = (getWidth() - gap * 3) / 4;
+        keyH_ = (getBottomBound() - top - 40 - gap * 3) / 4;
+        if (keyH_ > 78) keyH_ = 78;
+        top_ = top;
+        for (int i = 0; i < 16; ++i) {
+            const s32 x = getX() + (i % 4) * (keyW_ + gap), y = top + (i / 4) * (keyH_ + gap);
+            const bool sel = focused_ && i == sel_;
+            const bool disabled = !enabled(i);
+            const bool ok = std::string(kKeys[i]) == "確定";
+            const Color bg = sel ? kAccent : ok ? kOkBg : kPillOff;
+            const Color fg = sel ? kAccentText : disabled ? kLine : ok ? kOkText : kText;
+            r->drawRect(x, y, keyW_, keyH_, a(bg));
+            const float fs = std::strlen(kKeys[i]) > 2 ? 20 : 28;
+            const s32 kw = (s32)textWidth(r, kKeys[i], fs);
+            r->drawString(kKeys[i], false, x + (keyW_ - kw) / 2, y + keyH_ / 2 + (s32)(fs * 0.38f), fs, a(fg));
+        }
+        r->drawString("A 輸入　X 刪除　+ 確定　B 取消", false, getX() + 4, getBottomBound() - 8, 15, a(kSub));
+    }
+
+    void layout(u16, u16, u16, u16) override {}
+    tsl::elm::Element *requestFocus(tsl::elm::Element *, tsl::FocusDirection) override { return this; }
+    void setFocused(bool f) override { focused_ = f; Element::setFocused(f); }
+    // 自己畫選取框，不要 libtesla 預設那個包住整個鍵盤的大框
+    void drawHighlight(Renderer *) override {}
+
+    bool onClick(u64 keys) override {
+        if (keys & HidNpadButton_AnyLeft)  { if (sel_ % 4 > 0) --sel_; return true; }
+        if (keys & HidNpadButton_AnyRight) { if (sel_ % 4 < 3) ++sel_; return true; }
+        if (keys & HidNpadButton_AnyUp)    { if (sel_ >= 4) sel_ -= 4; return true; }
+        if (keys & HidNpadButton_AnyDown)  { if (sel_ < 12) sel_ += 4; return true; }
+        if (keys & HidNpadButton_X)        { press(3); return true; }       // 刪除
+        if (keys & HidNpadButton_Plus)     { return finish(); }
+        if (keys & HidNpadButton_A)        { return press(sel_); }
+        return false;                                                       // B 交給 libtesla 返回上一頁
+    }
+
+    bool onTouch(tsl::elm::TouchEvent e, s32 cx, s32 cy, s32, s32, s32, s32) override {
+        if (e != tsl::elm::TouchEvent::Release || keyW_ == 0) return false;
+        for (int i = 0; i < 16; ++i) {
+            const s32 x = getX() + (i % 4) * (keyW_ + 8), y = top_ + (i / 4) * (keyH_ + 8);
+            if (cx >= x && cx < x + keyW_ && cy >= y && cy < y + keyH_) { sel_ = i; return press(i); }
+        }
+        return false;
+    }
+
+private:
+    static constexpr const char *kKeys[16] = {
+        "7", "8", "9", "⌫",
+        "4", "5", "6", "清除",
+        "1", "2", "3", "±",
+        ".", "0", "00", "確定",
+    };
+
+    bool enabled(int i) const { return std::string(kKeys[i]) != "." || allowFloat_; }
+
+    bool press(int i) {
+        const std::string k = kKeys[i];
+        if (!enabled(i)) return true;
+        if (k == "確定") return finish();
+        if (k == "⌫") { text_.pop_back(); if (text_.empty() || text_ == "-") text_ = "0"; return true; }
+        if (k == "清除") { text_ = "0"; return true; }
+        if (k == "±") { if (text_[0] == '-') text_.erase(0, 1); else if (text_ != "0") text_.insert(0, "-"); return true; }
+        if (text_.size() >= 20) return true;
+        if (k == ".") { if (text_.find('.') == std::string::npos) text_ += "."; return true; }
+        // 數字：開頭的 0 直接換掉
+        if (text_ == "0") text_ = (k == "00") ? "0" : k;
+        else if (text_ == "-0") text_ = (k == "00") ? "-0" : "-" + k;
+        else text_ += k;
+        return true;
+    }
+
+    // 確定：先把要用的東西複製出來，再返回上一頁（返回後這個元件就被刪掉了）
+    bool finish() {
+        Done cb = done_;
+        std::string t = text_;
+        if (!t.empty() && t.back() == '.') t.pop_back();
+        tsl::goBack();
+        cb(t);
+        return true;
+    }
+
+    std::string text_;
+    bool allowFloat_;
+    Done done_;
+    int sel_ = 13;          // 預設停在 0
+    bool focused_ = false;
+    s32 keyW_ = 0, keyH_ = 0, top_ = 0;
 };
 
 // ───────── 說明框：固定在畫面下方，跟著游標顯示目前選項的說明 ─────────

@@ -60,71 +60,23 @@ static void onA(tsl::elm::ListItem *item, F fn) {
     });
 }
 
-// ═══════════════ 數值編輯器（Tesla 沒有鍵盤，用十字鍵改數字） ═══════════════
-// ↑↓ 改這一位　←→ 換位置　Y 加一位　X 刪一位　－ 正負號　A 確定　B 取消
+// ═══════════════ 數值輸入：數字鍵盤 ═══════════════
 class GuiValueEdit : public tsl::Gui {
 public:
     GuiValueEdit(std::string title, std::string initial, bool allowFloat,
                  std::function<void(const std::string &)> done)
-        : title_(std::move(title)), text_(initial.empty() ? "0" : std::move(initial)),
-          allowFloat_(allowFloat), done_(std::move(done)) {
-        cursor_ = text_.size() - 1;
-    }
+        : title_(std::move(title)), initial_(std::move(initial)), allowFloat_(allowFloat), done_(std::move(done)) {}
 
     tsl::elm::Element *createUI() override {
-        auto frame = new tsl::elm::OverlayFrame(title_, "↑↓ 改數字　←→ 移動　Y 加位　X 刪位");
-        auto list = new tsl::elm::List();
-        display_ = new tsl::elm::ListItem(render());
-        list->addItem(display_);
-        list->addItem(new tsl::elm::ListItem(allowFloat_ ? "小數點：在數字上按 ↑↓ 可以換成 ." : "整數"));
-        list->addItem(new tsl::elm::ListItem("－ 鍵：切換正負號"));
-        list->addItem(new tsl::elm::ListItem("A 確定　B 取消"));
-        frame->setContent(list);
+        auto frame = new tsl::elm::OverlayFrame(title_, "用十字鍵選數字按 A，或直接點螢幕");
+        frame->setContent(new ui::Keypad(initial_, allowFloat_, done_));
         return frame;
     }
 
-    bool handleInput(u64 down, u64, const HidTouchState &, HidAnalogStickState, HidAnalogStickState) override {
-        if (down & HidNpadButton_AnyUp)        { step(+1); }
-        else if (down & HidNpadButton_AnyDown) { step(-1); }
-        else if (down & HidNpadButton_AnyLeft) { if (cursor_ > 0) --cursor_; }
-        else if (down & HidNpadButton_AnyRight){ if (cursor_ + 1 < text_.size()) ++cursor_; }
-        else if (down & HidNpadButton_Y)       { if (text_.size() < 20) { text_.insert(cursor_ + 1, "0"); ++cursor_; } }
-        else if (down & HidNpadButton_X)       { if (text_.size() > 1) { text_.erase(cursor_, 1); if (cursor_ >= text_.size()) cursor_ = text_.size() - 1; } }
-        else if (down & HidNpadButton_Minus)   { if (text_[0] == '-') { text_.erase(0, 1); if (cursor_) --cursor_; } else { text_.insert(0, "-"); ++cursor_; } }
-        else if (down & HidNpadButton_A)       { auto cb = done_; std::string t = text_; tsl::goBack(); cb(t); return true; }
-        else if (down & HidNpadButton_B)       { tsl::goBack(); return true; }
-        else return false;
-        display_->setText(render());
-        return true;
-    }
-
 private:
-    void step(int d) {
-        char &ch = text_[cursor_];
-        if (ch == '-') return;
-        static const char digitsF[] = "0123456789.";
-        const char *set = allowFloat_ ? digitsF : "0123456789";
-        const int n = (int)std::strlen(set);
-        const char *p = std::strchr(set, ch);
-        int i = p ? (int)(p - set) : 0;
-        char next = set[(i + d + n) % n];
-        if (next == '.' && text_.find('.') != std::string::npos) next = set[(i + 2 * d + n) % n];  // 只能有一個小數點
-        ch = next;
-    }
-    std::string render() const {
-        std::string out;
-        for (size_t i = 0; i < text_.size(); ++i) {
-            if (i == cursor_) { out += "["; out += text_[i]; out += "]"; }
-            else out += text_[i];
-        }
-        return out;
-    }
-
-    std::string title_, text_;
-    size_t cursor_ = 0;
+    std::string title_, initial_;
     bool allowFloat_;
     std::function<void(const std::string &)> done_;
-    tsl::elm::ListItem *display_ = nullptr;
 };
 
 static bool parseValue(ValueType t, const std::string &s, u64 &out) {
@@ -515,7 +467,7 @@ private:
         }
         if (f == value_)
             return condNeedsValue(g_ui.cond)
-                ? "數值：輸入遊戲畫面上看到的數字。按 A 編輯：↑↓ 改數字、←→ 換位置、Y 加一位、X 刪一位。"
+                ? "數值：輸入遊戲畫面上看到的數字。按 A 開啟數字鍵盤，可以直接輸入任何數字。"
                 : "數值：目前的比較方式是跟上次比，不用輸入數值。";
         if (f == scope_)
             return g_ui.scope == SearchScope::Heap
