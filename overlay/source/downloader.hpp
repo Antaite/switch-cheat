@@ -31,6 +31,12 @@ public:
 private:
     static void threadMain(void *arg);
     void run();
+    void setStage(const char *text);
+    void fail(const char *what, Result rc);
+    void cleanup();
+
+    u64 startNs_ = 0;
+    bool finishCleanup_ = false;
 
     Thread thread_{};
     bool threadValid_ = false;

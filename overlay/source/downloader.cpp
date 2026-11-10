@@ -1,4 +1,5 @@
 #include "downloader.hpp"
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -28,29 +29,61 @@ size_t writeToFile(char *ptr, size_t size, size_t nmemb, void *userdata) {
     return std::fwrite(ptr, size, nmemb, static_cast<FILE *>(userdata));
 }
 
+FILE *g_log = nullptr;   // switch/CheatTW/download.log，回報問題用
+
+void logf(const char *fmt, ...) {
+    if (!g_log) return;
+    va_list ap;
+    va_start(ap, fmt);
+    std::vfprintf(g_log, fmt, ap);
+    va_end(ap);
+    std::fputc('\n', g_log);
+    std::fflush(g_log);
+}
+
+// 進度回呼：超過總時限就中止（避免卡死）
+struct XferCtx { u64 deadline; };
+int onProgress(void *p, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return armTicksToNs(armGetSystemTick()) > static_cast<XferCtx *>(p)->deadline ? 1 : 0;
+}
+
 // 下載到暫存檔，成功才改名，避免中途斷線留下壞檔；回傳 HTTP 狀態碼（0 = 連線失敗）
-long fetch(const std::string &url, const std::string &path) {
+long fetch(const std::string &url, const std::string &path, std::string *err = nullptr) {
     const std::string tmp = path + ".part";
     FILE *f = std::fopen(tmp.c_str(), "wb");
-    if (!f) return -1;
+    if (!f) { logf("無法寫入 %s", tmp.c_str()); if (err) *err = "SD 卡無法寫入"; return -1; }
 
     CURL *curl = curl_easy_init();
-    if (!curl) { std::fclose(f); std::remove(tmp.c_str()); return 0; }
+    if (!curl) { std::fclose(f); std::remove(tmp.c_str()); if (err) *err = "curl 初始化失敗"; return 0; }
+    char errbuf[CURL_ERROR_SIZE] = {};
+    XferCtx ctx{armTicksToNs(armGetSystemTick()) + 40ull * 1000000000ull};   // 每個檔最多 40 秒
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToFile);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, f);
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "CheatTW");
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 40L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, onProgress);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
     curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 16384L);   // 接收緩衝也調小
-    // 主機上沒有內建憑證庫，關掉憑證驗證（只抓公開的金手指文字檔）
+    // 只抓公開的金手指文字檔，關掉憑證驗證避免主機時間不準時連不上
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    if (g_log) {
+        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        curl_easy_setopt(curl, CURLOPT_STDERR, g_log);
+    }
 
+    logf("GET %s", url.c_str());
     const CURLcode rc = curl_easy_perform(curl);
     long http = 0;
     if (rc == CURLE_OK) curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http);
+    logf("→ curl=%d http=%ld %s", (int)rc, http, errbuf);
+    if (err && rc != CURLE_OK) *err = errbuf[0] ? errbuf : curl_easy_strerror(rc);
     curl_easy_cleanup(curl);
     std::fclose(f);
 
@@ -86,7 +119,36 @@ std::string Downloader::baseUrl() {
 }
 
 std::string Downloader::message() const {
-    return message_;
+    std::string m = message_;
+    if (state_ == State::Running) {
+        const u64 sec = (armTicksToNs(armGetSystemTick()) - startNs_) / 1000000000ull;
+        m += "（" + std::to_string(sec) + " 秒）";
+    }
+    return m;
+}
+
+void Downloader::setStage(const char *text) {
+    std::snprintf(message_, sizeof(message_), "%s", text);
+    logf("[%s]", text);
+}
+
+void Downloader::fail(const char *what, Result rc) {
+    if (rc) std::snprintf(message_, sizeof(message_), "%s（%04u-%04u）", what, 2000 + (rc & 0x1FF), (rc >> 9) & 0x1FFF);
+    else std::snprintf(message_, sizeof(message_), "%s", what);
+    logf("失敗：%s", message_);
+    state_ = State::Failed;
+    if (g_log) { std::fclose(g_log); g_log = nullptr; }
+}
+
+void Downloader::cleanup() {
+    if (finishCleanup_) {
+        curl_global_cleanup();
+        socketExit();
+        smExit();
+        finishCleanup_ = false;
+    }
+    logf("結果：%s", message_);
+    if (g_log) { std::fclose(g_log); g_log = nullptr; }
 }
 
 bool Downloader::start(const std::string &tid, const std::string &bid) {
@@ -95,7 +157,8 @@ bool Downloader::start(const std::string &tid, const std::string &bid) {
     tid_ = tid;
     bid_ = bid;
     filesDone_ = 0;
-    std::snprintf(message_, sizeof(message_), "連線中…");
+    startNs_ = armTicksToNs(armGetSystemTick());
+    std::snprintf(message_, sizeof(message_), "準備中…");
     state_ = State::Running;
     // curl + TLS 要的 stack 比較多，給 64KB
     if (R_FAILED(threadCreate(&thread_, threadMain, this, nullptr, 0x10000, 0x2C, -2)) ||
@@ -116,19 +179,26 @@ void Downloader::threadMain(void *arg) {
 }
 
 void Downloader::run() {
-    // 網路服務要在 sm 開著的時候初始化（libtesla 平常是關著的）
+    mkdirs(kAppDir);
+    g_log = std::fopen((std::string(kAppDir) + "/download.log").c_str(), "w");
+    logf("CheatTW 下載記錄  TID %s  BID %s", tid_.c_str(), bid_.c_str());
+
+    // curl 的 SSL 是用系統的 ssl 服務，初始化和每次連線都要跟 sm 拿服務，
+    // 所以整個下載期間都要開著 sm（libtesla 平常是關著的）
+    setStage("初始化網路…");
     Result rc = smInitialize();
-    if (R_SUCCEEDED(rc)) {
-        rc = socketInitialize(&kSocketConfig);
+    if (R_FAILED(rc)) { fail("系統服務無法使用", rc); return; }
+    rc = socketInitialize(&kSocketConfig);
+    if (R_FAILED(rc)) { smExit(); fail("網路初始化失敗", rc); return; }
+    const CURLcode grc = curl_global_init(CURL_GLOBAL_DEFAULT);
+    logf("curl_global_init=%d", (int)grc);
+    if (grc != CURLE_OK) {
+        socketExit();
         smExit();
-    }
-    if (R_FAILED(rc)) {
-        std::snprintf(message_, sizeof(message_), "網路初始化失敗（%04u-%04u）",
-                      2000 + (rc & 0x1FF), (rc >> 9) & 0x1FFF);
-        state_ = State::Failed;
+        fail("SSL 初始化失敗", 0);
         return;
     }
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    finishCleanup_ = true;
 
     const std::string base = baseUrl() + "db/" + tid_ + "/";
     const std::string dir = std::string(kDbDir) + "/" + tid_;
@@ -136,17 +206,15 @@ void Downloader::run() {
 
     // 1. 組合清單：沒有就是線上碼庫沒收錄這個版本
     const std::string metaPath = dir + "/" + bid_ + ".meta.tsv";
-    long http = fetch(base + bid_ + ".meta.tsv", metaPath);
+    setStage("連線到碼庫…");
+    std::string err;
+    long http = fetch(base + bid_ + ".meta.tsv", metaPath, &err);
     if (http != 200) {
-        if (http == 404) {
-            std::snprintf(message_, sizeof(message_), "線上碼庫沒有這個版本的碼");
-            state_ = State::NotFound;
-        } else {
-            std::snprintf(message_, sizeof(message_), http == 0 ? "連不上網路，請確認已連上 Wi-Fi" : "下載失敗（HTTP %ld）", http);
-            state_ = State::Failed;
-        }
-        curl_global_cleanup();
-        socketExit();
+        if (http == 404) std::snprintf(message_, sizeof(message_), "線上碼庫沒有這個版本的碼");
+        else if (http == 0) std::snprintf(message_, sizeof(message_), "連線失敗：%s", err.empty() ? "請確認已連上 Wi-Fi" : err.c_str());
+        else std::snprintf(message_, sizeof(message_), "下載失敗（HTTP %ld）", http);
+        cleanup();
+        state_ = http == 404 ? State::NotFound : State::Failed;
         return;
     }
 
@@ -162,22 +230,20 @@ void Downloader::run() {
     }
     int ok = 0;
     for (size_t i = 0; i < files.size(); ++i) {
-        std::snprintf(message_, sizeof(message_), "下載中 %zu / %zu", i + 1, files.size());
+        char st[64];
+        std::snprintf(st, sizeof(st), "下載中 %zu / %zu", i + 1, files.size());
+        setStage(st);
         if (fetch(base + files[i], dir + "/" + files[i]) == 200) ++ok;
         filesDone_ = ok;
     }
     fetch(base + "title.txt", dir + "/title.txt");   // 遊戲中文名，沒有也沒關係
 
-    curl_global_cleanup();
-    socketExit();
-
-    if (ok == (int)files.size() && ok > 0) {
-        std::snprintf(message_, sizeof(message_), "下載完成，共 %d 個組合", ok);
-        state_ = State::Done;
-    } else {
-        std::snprintf(message_, sizeof(message_), "部分下載失敗（%d / %zu）", ok, files.size());
-        state_ = ok > 0 ? State::Done : State::Failed;
-    }
+    // 先寫好結果訊息再收尾，狀態最後才改，畫面看到結束時訊息一定是最終的
+    const bool allOk = ok == (int)files.size() && ok > 0;
+    if (allOk) std::snprintf(message_, sizeof(message_), "下載完成，共 %d 個組合，請選一個載入", ok);
+    else std::snprintf(message_, sizeof(message_), "部分下載失敗（%d / %zu）", ok, files.size());
+    cleanup();
+    state_ = (allOk || ok > 0) ? State::Done : State::Failed;
 }
 
 } // namespace cheattw
