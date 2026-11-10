@@ -7,7 +7,7 @@
 
 namespace ui {
 
-using tsl::gfx::Color;
+using tsl::Color;
 using tsl::gfx::Renderer;
 
 // 顏色（每個通道 0x0–0xF）
