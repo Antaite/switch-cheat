@@ -1,0 +1,102 @@
+{
+ "_說明": "排越前面優先權越高（名稱衝突時以前面的為主），原作者的碼庫放前面、整合型碼庫放後面。git = 淺層 clone；zip = 下載後直接讀；path = 本機資料夾或 zip。路徑會自動辨識，不用設定。patches = 一起收錄 exefs_patches 的 IPS 修補檔。license 欄位：沒寫授權的要先徵求作者同意再公開發佈。",
+ "sources": [
+  {
+   "id": "tomvita",
+   "name": "tomvita / MyNXCheats（Breeze 作者，含特殊碼）",
+   "url": "https://github.com/tomvita/MyNXCheats",
+   "git": "https://github.com/tomvita/MyNXCheats.git",
+   "license": "未標示，需徵求同意",
+   "enabled": true
+  },
+  {
+   "id": "60fps",
+   "name": "ChanseyIsTheBest / NX-60FPS-RES-GFX-Cheats（60FPS、解析度、畫質）",
+   "url": "https://github.com/ChanseyIsTheBest/NX-60FPS-RES-GFX-Cheats",
+   "git": "https://github.com/ChanseyIsTheBest/NX-60FPS-RES-GFX-Cheats.git",
+   "license": "未標示，作者標記在各遊戲檔內",
+   "enabled": true
+  },
+  {
+   "id": "bad1dea",
+   "name": "bad1dea / NXCheats（部分遊戲需要 IPS 修補檔）",
+   "url": "https://github.com/bad1dea/NXCheats",
+   "git": "https://github.com/bad1dea/NXCheats.git",
+   "patches": true,
+   "license": "MIT",
+   "enabled": true
+  },
+  {
+   "id": "arch9sk7",
+   "name": "Arch9SK7 / MyNXCheats",
+   "url": "https://github.com/Arch9SK7/MyNXCheats",
+   "git": "https://github.com/Arch9SK7/MyNXCheats.git",
+   "license": "未標示，需徵求同意",
+   "enabled": true
+  },
+  {
+   "id": "enterprisefreak",
+   "name": "EnterpriseFreak / nsw-atmos-cheats",
+   "url": "https://github.com/EnterpriseFreak/nsw-atmos-cheats",
+   "git": "https://github.com/EnterpriseFreak/nsw-atmos-cheats.git",
+   "license": "未標示，需徵求同意",
+   "enabled": true
+  },
+  {
+   "id": "edizon",
+   "name": "WerWolv / EdiZon_CheatsConfigsAndScripts（EdiZon 官方碼庫）",
+   "url": "https://github.com/WerWolv/EdiZon_CheatsConfigsAndScripts",
+   "git": "https://github.com/WerWolv/EdiZon_CheatsConfigsAndScripts.git",
+   "license": "未標示，需徵求同意",
+   "enabled": true
+  },
+  {
+   "id": "hamlet",
+   "name": "HamletDuFromage / switch-cheats-db（GBAtemp 主檔 + 60FPS，AIO Updater 用的碼庫）",
+   "url": "https://github.com/HamletDuFromage/switch-cheats-db",
+   "zip": "https://github.com/HamletDuFromage/switch-cheats-db/releases/latest/download/contents_complete.zip",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  },
+  {
+   "id": "sthetix",
+   "name": "sthetix / nx-cheats-db（最大的整合碼庫，含 CheatSlips）",
+   "url": "https://github.com/sthetix/nx-cheats-db",
+   "zip": "https://github.com/sthetix/nx-cheats-db/releases/latest/download/contents_complete.zip",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  },
+  {
+   "id": "exploitz86",
+   "name": "exploitz86 / switch-cheats-db（SwitchBlade 用的碼庫）",
+   "url": "https://github.com/exploitz86/switch-cheats-db",
+   "zip": "https://github.com/exploitz86/switch-cheats-db/releases/latest/download/contents_complete.zip",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  },
+  {
+   "id": "costelacnx",
+   "name": "CostelaCNX / switch-cheats-db",
+   "url": "https://github.com/CostelaCNX/switch-cheats-db",
+   "zip": "https://github.com/CostelaCNX/switch-cheats-db/releases/latest/download/contents_complete.zip",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  },
+  {
+   "id": "ibnux",
+   "name": "ibnux / switch-cheat（舊版整合碼庫）",
+   "url": "https://github.com/ibnux/switch-cheat",
+   "git": "https://github.com/ibnux/switch-cheat.git",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  },
+  {
+   "id": "othmanead",
+   "name": "othmanead / switch-cheats（ibnux 分支）",
+   "url": "https://github.com/othmanead/switch-cheats",
+   "git": "https://github.com/othmanead/switch-cheats.git",
+   "license": "整合碼庫，致謝原作者",
+   "enabled": true
+  }
+ ]
+}

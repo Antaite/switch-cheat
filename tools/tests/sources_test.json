@@ -1,0 +1,8 @@
+{"sources": [
+ {"id": "範例A", "path": "fixtures/srcA"},
+ {"id": "範例B", "path": "fixtures/srcB"},
+ {"id": "範例C", "path": "fixtures/srcC.zip"},
+ {"id": "範例D", "path": "fixtures/srcD", "patches": true},
+ {"id": "壞掉的", "path": "fixtures/不存在"},
+ {"id": "關掉的", "path": "fixtures/srcA", "enabled": false}
+]}

@@ -1,0 +1,65 @@
+# 金手指名稱中英對照表（overlay 與合併腳本共用）
+# 格式：英文<TAB>中文<TAB>分類（戰鬥／金錢／道具／畫面／移動／其他，可空白）
+# 比對不分大小寫、只比對完整單字；長詞優先，所以片語要寫在這裡讓它先吃掉
+Infinite HP	無限血量	戰鬥
+Infinite Health	無限血量	戰鬥
+Max HP	血量最大	戰鬥
+Infinite MP	無限魔力	戰鬥
+Infinite Mana	無限魔力	戰鬥
+Infinite Stamina	無限體力	戰鬥
+Infinite Ammo	無限彈藥	戰鬥
+One Hit Kill	一擊必殺	戰鬥
+OHK	一擊必殺	戰鬥
+God Mode	無敵模式	戰鬥
+Invincible	無敵	戰鬥
+Invincibility	無敵	戰鬥
+No Damage	不受傷害	戰鬥
+Damage Multiplier	傷害倍率	戰鬥
+Max Level	等級最大	戰鬥
+Max EXP	經驗值最大	戰鬥
+EXP Multiplier	經驗值倍率	戰鬥
+Max Money	金錢最大	金錢
+Infinite Money	無限金錢	金錢
+Max Gold	金幣最大	金錢
+Infinite Gold	無限金幣	金錢
+Max Rupees	盧比最大	金錢
+Infinite Rupees	無限盧比	金錢
+Max Coins	金幣最大	金錢
+Infinite Coins	無限金幣	金錢
+Money	金錢	金錢
+Gold	金幣	金錢
+Coins	金幣	金錢
+Items Never Decrease	道具不減	道具
+Infinite Items	無限道具	道具
+Max Items	道具最大	道具
+Item Quantity	道具數量	道具
+All Items	全道具	道具
+Unlock All	全部解鎖	道具
+Infinite Durability	武器不壞	道具
+Unbreakable Weapons	武器不壞	道具
+Moon Jump	月球跳	移動
+Infinite Jump	無限跳躍	移動
+Speed Hack	加速	移動
+Move Speed	移動速度	移動
+Walk Through Walls	穿牆	移動
+Teleport	傳送	移動
+60 FPS	60FPS 解鎖	畫面
+60FPS	60FPS 解鎖	畫面
+30 FPS	30FPS	畫面
+Resolution	解析度	畫面
+Dynamic Resolution	動態解析度	畫面
+Disable Dynamic Resolution	關閉動態解析度	畫面
+Remove Black Bars	移除黑邊	畫面
+Hide HUD	隱藏介面	畫面
+Remove HUD	隱藏介面	畫面
+Timer	計時器	其他
+Freeze Timer	時間暫停	其他
+Infinite Time	無限時間	其他
+Hold	按住
+Press	按下
+Enable	開啟
+Disable	關閉
+Master Code	主碼
+Required	必開
+Infinite	無限
+Max	最大

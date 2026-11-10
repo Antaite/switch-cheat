@@ -1,0 +1,64 @@
+# 編譯 overlay，打包成可以直接解壓到 SD 卡的 zip，發佈到 Releases
+name: 編譯 overlay
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 核心與搜尋引擎測試
+        working-directory: common/tests
+        run: |
+          g++ -std=c++17 -Wall -I../include test_core.cpp ../source/cheat_core.cpp -o test_core && ./test_core ../../data/translations/zh_TW.tsv
+          g++ -std=c++17 -Wall -I../include test_search.cpp ../source/search_engine.cpp ../source/cheat_core.cpp -o test_search && ./test_search
+      - name: 合併工具測試
+        working-directory: tools
+        run: python3 -m unittest tests/test_merge.py
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: 安裝工具
+        run: apt-get update -qq && apt-get install -y -qq git zip > /dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: 取得 libtesla
+        run: git clone --depth 1 https://github.com/WerWolv/libtesla overlay/libs/libtesla
+
+      - name: 編譯
+        working-directory: overlay
+        run: make -j$(nproc)
+
+      - name: 打包成 SD 卡結構
+        run: |
+          mkdir -p sd/switch/.overlays sd/switch/CheatTW
+          cp overlay/CheatTW.ovl sd/switch/.overlays/
+          cp data/translations/zh_TW.tsv sd/switch/CheatTW/
+          cd sd && zip -r ../CheatTW-sd.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CheatTW-sd
+          path: CheatTW-sd.zip
+
+      - name: 發佈到 Releases（最新測試版）
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: 最新測試版
+          prerelease: true
+          body: |
+            自動編譯的測試版（commit ${{ github.sha }}）。
+            下載 CheatTW-sd.zip，解壓縮到 SD 卡根目錄，重開 Tesla 選單就會看到 CheatTW。
+          files: CheatTW-sd.zip

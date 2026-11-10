@@ -1,0 +1,48 @@
+// 進階搜尋：把 SearchEngine 接到 dmnt，並在背景執行緒跑，畫面不會卡住
+#pragma once
+#include <atomic>
+#include <string>
+#include <switch.h>
+#include "search_engine.hpp"
+
+namespace cheattw {
+
+enum class SearchScope : u8 { Heap, MainAndHeap };
+
+class SearchTask {
+public:
+    // 開始搜尋（第一次或接著搜），立刻回傳；進度看 progress()
+    bool start(bool first, ValueType type, Cond cond, u64 valueBits, SearchScope scope);
+    void cancel() { progress_.cancel = true; }
+    void reset();
+
+    bool running() const { return running_; }
+    // 搜完後第一次呼叫回傳 true（畫面用來更新一次）
+    bool takeFinished() { return finished_.exchange(false); }
+    SearchResult lastResult() const { return last_; }
+    SearchProgress &progress() { return progress_; }
+    SearchEngine &engine();
+
+    // 位址 → 金手指用的記憶體區與偏移；回傳 false 表示不在已知區段
+    bool locate(u64 addr, u8 &regionType, u64 &offset, std::string &label) const;
+
+private:
+    static void threadMain(void *arg);
+
+    Thread thread_{};
+    bool threadValid_ = false;
+    std::atomic<bool> running_{false};
+    std::atomic<bool> finished_{false};
+    SearchProgress progress_;
+    SearchResult last_ = SearchResult::NotStarted;
+
+    bool first_ = true;
+    ValueType type_ = ValueType::U32;
+    Cond cond_ = Cond::Equal;
+    u64 value_ = 0;
+    SearchScope scope_ = SearchScope::Heap;
+};
+
+SearchTask &searchTask();
+
+} // namespace cheattw

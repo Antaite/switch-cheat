@@ -1,0 +1,10 @@
+overlay/build/
+overlay/*.ovl
+overlay/*.elf
+overlay/*.nacp
+overlay/*.map
+tools/.cache/
+tools/dist/
+dist/
+__pycache__/
+overlay/libs/

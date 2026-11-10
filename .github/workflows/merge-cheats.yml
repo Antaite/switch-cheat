@@ -1,0 +1,47 @@
+# 每天自動合併各碼庫，結果推到 gh-pages 分支（Switch 端從這裡下載）
+name: 合併金手指碼庫
+
+on:
+  schedule:
+    - cron: "17 19 * * *"     # 台灣時間每天凌晨 3:17
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 測試
+        working-directory: tools
+        run: python -m unittest tests/test_merge.py
+
+      - name: 下載中文遊戲名稱（titledb）
+        continue-on-error: true
+        run: |
+          mkdir -p titledb
+          for f in TW.zh.json HK.zh.json US.en.json; do
+            curl -fsSL -o "titledb/$f" "https://raw.githubusercontent.com/blawar/titledb/master/$f" || echo "略過 $f"
+          done
+
+      - name: 合併
+        working-directory: tools
+        run: python merge_cheats.py --out ../dist --titledb ../titledb
+
+      - name: 合併報告
+        run: python -c "import json;r=json.load(open('dist/report.json'));print(json.dumps(r['sources'],ensure_ascii=False,indent=1));print(r['stats'])"
+
+      - name: 發佈到 gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true
