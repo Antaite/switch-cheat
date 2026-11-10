@@ -126,7 +126,9 @@ Result CheatSession::refresh() {
             lc.id = e.cheat_id;
             lc.enabled = e.enabled;
             lc.isMaster = (e.cheat_id == 0);   // dmnt 固定把 master code 放在 id 0
-            lc.name.assign(e.definition.readable_name, strnlen(e.definition.readable_name, DMNT_CHEAT_NAME_MAX));
+            size_t len = 0;   // newlib 預設沒有 strnlen
+            while (len < DMNT_CHEAT_NAME_MAX && e.definition.readable_name[len]) ++len;
+            lc.name.assign(e.definition.readable_name, len);
             lc.zhName = dict_.translate(lc.name, &lc.category);
             cheats_.push_back(std::move(lc));
         }
