@@ -17,17 +17,36 @@
 #include <functional>
 #include "cheat_session.hpp"
 #include "search_task.hpp"
+#include "ui.hpp"
 
 using namespace cheattw;
 
 static const char *kCategories[] = { "全部", "戰鬥", "金錢", "道具", "移動", "畫面", "其他" };
 constexpr int kCategoryCount = sizeof(kCategories) / sizeof(kCategories[0]);
 
-static std::string statusLine() {
+// 錯誤碼用 Switch 慣用的 2XXX-YYYY 格式，回報問題時好查
+static std::string errorCode(Result rc) {
+    char buf[16];
+    std::snprintf(buf, sizeof(buf), "%04u-%04u", 2000 + (rc & 0x1FF), (rc >> 9) & 0x1FFF);
+    return buf;
+}
+
+static void mainStatus(std::string &text, ui::Tone &tone) {
     auto &s = session();
-    if (!s.isOpen()) return "dmnt 無法連線（請先關掉 Breeze／EdiZon）";
-    if (!s.hasGame()) return "目前沒有執行中的遊戲";
-    return "已開啟 " + std::to_string(s.enabledCount()) + " / " + std::to_string(s.cheats().size()) + " 條";
+    if (!s.isOpen()) {
+        text = "dmnt 連不上（錯誤 " + errorCode(s.lastError()) + "）";
+        tone = ui::Tone::Error;
+    } else if (!s.hasGame()) {
+        text = "目前沒有執行中的遊戲";
+        tone = ui::Tone::Warn;
+    } else if (s.cheats().empty()) {
+        text = "這個遊戲版本還沒有金手指";
+        tone = ui::Tone::Warn;
+    } else {
+        text = "dmnt 已連線 · 已開啟 " + std::to_string(s.enabledCount()) + " / " +
+               std::to_string(s.cheats().size()) + " 條";
+        tone = ui::Tone::Ok;
+    }
 }
 
 // 只要 A 鍵的點擊處理
@@ -127,39 +146,6 @@ static bool parseValue(ValueType t, const std::string &s, u64 &out) {
     return true;
 }
 
-// ═══════════════ 金手指列表 ═══════════════
-class GuiCheatList : public tsl::Gui {
-public:
-    explicit GuiCheatList(std::string category) : category_(std::move(category)) {}
-
-    tsl::elm::Element *createUI() override {
-        auto frame = new tsl::elm::OverlayFrame("金手指 · " + category_, statusLine());
-        auto list = new tsl::elm::List();
-
-        bool any = false;
-        for (const auto &c : session().cheats()) {
-            if (category_ != "全部" && c.category != category_) continue;
-            any = true;
-            if (c.isMaster) {
-                list->addItem(new tsl::elm::ListItem(c.zhName, "主碼・自動"));
-                continue;
-            }
-            auto item = new tsl::elm::ToggleListItem(c.zhName, c.enabled, "開啟", "關閉");
-            const u32 id = c.id;
-            item->setStateChangedListener([id, item](bool on) {
-                if (R_FAILED(session().toggle(id, on))) item->setState(!on);
-            });
-            list->addItem(item);
-        }
-        if (!any) list->addItem(new tsl::elm::ListItem("這個分類沒有金手指"));
-        frame->setContent(list);
-        return frame;
-    }
-
-private:
-    std::string category_;
-};
-
 // ═══════════════ 線上碼庫：選組合 ═══════════════
 class GuiOnline : public tsl::Gui {
 public:
@@ -168,25 +154,29 @@ public:
         auto frame = new tsl::elm::OverlayFrame("線上碼庫", "BID " + s.bid().substr(0, 8));
         auto list = new tsl::elm::List();
 
-        const auto groups = s.dbGroups();
-        if (groups.empty()) {
-            list->addItem(new tsl::elm::CategoryHeader("這個版本還沒有碼庫快取"));
-            list->addItem(new tsl::elm::ListItem("請用主程式下載，或把檔案放到"));
-            list->addItem(new tsl::elm::ListItem("switch/CheatTW/db/" + s.tid().substr(0, 8) + "…"));
-        } else {
-            list->addItem(new tsl::elm::CategoryHeader("主碼不同的碼不能混用，所以分成組合"));
-            for (size_t i = 0; i < groups.size(); ++i) {
-                const DbGroup g = groups[i];
-                std::string src = g.sources.size() > 36 ? g.sources.substr(0, 36) + "…" : g.sources;
-                list->addItem(new tsl::elm::CategoryHeader("組合 " + std::to_string(i + 1) + "：" + src, true));
-                auto item = new tsl::elm::ListItem(i == 0 ? "載入（推薦）" : "載入", label(g));
-                onA(item, [g, item]() {
-                    std::string msg;
-                    session().loadGroup(g, msg);
-                    item->setValue(msg);
-                });
-                list->addItem(item);
-            }
+        groups_ = s.dbGroups();
+        msg_ = groups_.empty() ? "這個版本還沒有碼庫快取" : "主碼不同的碼不能混用，所以分成組合";
+        tone_ = groups_.empty() ? ui::Tone::Warn : ui::Tone::Ok;
+        list->addItem(new ui::StatusBar([this](std::string &t, ui::Tone &tone) { t = msg_; tone = tone_; }));
+
+        if (groups_.empty()) {
+            list->addItem(new tsl::elm::CategoryHeader("請用主程式下載，或把檔案放到"));
+            list->addItem(new tsl::elm::CategoryHeader("switch/CheatTW/db/遊戲TID/", true));
+        }
+        for (size_t i = 0; i < groups_.size(); ++i) {
+            const DbGroup g = groups_[i];
+            std::string src = g.sources.size() > 30 ? g.sources.substr(0, 30) + "…" : g.sources;
+            list->addItem(new tsl::elm::CategoryHeader("組合 " + std::to_string(i + 1) + "：" + src, true));
+            auto item = new tsl::elm::ListItem(i == 0 ? "載入（推薦）" : "載入", label(g));
+            items_.push_back(item);
+            onA(item, [this, g]() {
+                std::string m;
+                const Result rc = session().loadGroup(g, m);
+                msg_ = m;
+                tone_ = R_SUCCEEDED(rc) ? ui::Tone::Ok : ui::Tone::Error;
+                for (size_t k = 0; k < items_.size(); ++k) items_[k]->setValue(label(groups_[k]));
+            });
+            list->addItem(item);
         }
         frame->setContent(list);
         return frame;
@@ -194,11 +184,16 @@ public:
 
 private:
     static std::string label(const DbGroup &g) {
+        if (session().loadedGroup() == g.file) return "使用中";
         std::string v = std::to_string(g.count) + " 條";
-        if (g.needsPatch) v += "・要修補檔";
-        if (session().loadedGroup() == g.file) v += "・使用中";
+        if (g.needsPatch) v += "・修補";
         return v;
     }
+
+    std::vector<DbGroup> groups_;
+    std::vector<tsl::elm::ListItem *> items_;
+    std::string msg_;
+    ui::Tone tone_ = ui::Tone::Ok;
 };
 
 // ═══════════════ 進階搜尋：單一結果的操作 ═══════════════
@@ -216,7 +211,10 @@ public:
 
         auto frame = new tsl::elm::OverlayFrame(known ? where : "未知區段", "目前數值 " + formatValue(t, current_));
         auto list = new tsl::elm::List();
-        msg_ = new tsl::elm::ListItem("", "");
+        list->addItem(new ui::StatusBar([this](std::string &txt, ui::Tone &tone) {
+            txt = msg_.empty() ? "選擇要怎麼處理這個位址" : msg_;
+            tone = msgTone_;
+        }));
 
         if (known) {
             auto lockNow = new tsl::elm::ListItem("鎖定為目前數值");
@@ -229,7 +227,7 @@ public:
                     [this, t, region, offset, where](const std::string &s) {
                         u64 bits;
                         if (parseValue(t, s, bits)) makeLock(t, region, offset, where, bits);
-                        else msg_->setValue("數值格式不對");
+                        else setMsg("數值格式不對", false);
                     });
             });
             list->addItem(lockCustom);
@@ -240,14 +238,13 @@ public:
             tsl::changeTo<GuiValueEdit>("改成", formatValue(t, current_), isFloat(t),
                 [this, t](const std::string &s) {
                     u64 bits;
-                    if (!parseValue(t, s, bits)) { msg_->setValue("數值格式不對"); return; }
+                    if (!parseValue(t, s, bits)) { setMsg("數值格式不對", false); return; }
                     Result rc = dmntchtWriteCheatProcessMemory(addr_, &bits, valueSize(t));
-                    msg_->setValue(R_SUCCEEDED(rc) ? "已寫入" : "寫入失敗");
+                    setMsg(R_SUCCEEDED(rc) ? "已寫入" : "寫入失敗", R_SUCCEEDED(rc));
                 });
         });
         list->addItem(writeOnce);
 
-        list->addItem(msg_);
         list->addItem(new tsl::elm::CategoryHeader("位址每次開遊戲可能不同，要跨次使用請用 Breeze 指標搜尋", true));
         frame->setContent(list);
         return frame;
@@ -259,12 +256,15 @@ private:
     void makeLock(ValueType t, u8 region, u64 offset, const std::string &where, u64 bits) {
         Cheat c = makeStaticWriteCheat("[自製] 鎖定 " + where + " = " + formatValue(t, bits), region, offset, t, bits);
         std::string m;
-        session().addOwnCheat(c, true, m);
-        msg_->setValue(m);
+        const Result rc = session().addOwnCheat(c, true, m);
+        setMsg(m, R_SUCCEEDED(rc));
     }
 
+    void setMsg(const std::string &m, bool ok) { msg_ = m; msgTone_ = ok ? ui::Tone::Ok : ui::Tone::Error; }
+
     u64 addr_, current_;
-    tsl::elm::ListItem *msg_ = nullptr;
+    std::string msg_;
+    ui::Tone msgTone_ = ui::Tone::Ok;
 };
 
 // ═══════════════ 進階搜尋：結果列表 ═══════════════
@@ -321,8 +321,7 @@ public:
         auto frame = new tsl::elm::OverlayFrame("進階搜尋", "記憶體數值搜尋");
         auto list = new tsl::elm::List();
 
-        status_ = new tsl::elm::ListItem("狀態", "");
-        list->addItem(status_);
+        list->addItem(new ui::StatusBar([this](std::string &t, ui::Tone &tone) { t = statusText_; tone = statusTone_; }));
 
         list->addItem(new tsl::elm::CategoryHeader("條件"));
         type_ = new tsl::elm::ListItem("資料型別", "");
@@ -375,7 +374,7 @@ public:
         onA(resetItem, [this]() {
             searchTask().reset();
             g_ui.cond = Cond::Equal;
-            status_->setValue("已清除");
+            setStatus("已清除");
             refreshLabels();
         });
         list->addItem(resetItem);
@@ -395,10 +394,13 @@ public:
             const u64 total = task.progress().total;
             const u64 done = task.progress().done;
             const int pct = total ? (int)(done * 100 / total) : 0;
-            status_->setValue("搜尋中 " + std::to_string(pct) + "%");
+            setStatus("搜尋中 " + std::to_string(pct) + "%（可以按「取消搜尋」）", ui::Tone::Warn);
         }
         if (task.takeFinished()) {
-            status_->setValue(std::string(searchResultText(task.lastResult())));
+            const SearchResult r = task.lastResult();
+            setStatus(r == SearchResult::Ok ? "完成，找到 " + std::to_string(task.engine().count()) + " 筆"
+                                            : std::string(searchResultText(r)),
+                      r == SearchResult::Ok ? ui::Tone::Ok : ui::Tone::Error);
             refreshLabels();
         }
     }
@@ -409,15 +411,15 @@ private:
         if (task.running()) { task.cancel(); return; }
         u64 bits = 0;
         if (condNeedsValue(g_ui.cond) && !parseValue(g_ui.type, g_ui.value, bits)) {
-            status_->setValue("數值格式不對");
+            setStatus("數值格式不對", ui::Tone::Error);
             return;
         }
         const bool first = !task.engine().started();
         if (!task.start(first, g_ui.type, g_ui.cond, bits, g_ui.scope)) {
-            status_->setValue("無法開始（沒有遊戲？）");
+            setStatus("無法開始（沒有遊戲？）", ui::Tone::Error);
             return;
         }
-        status_->setValue("搜尋中 0%");
+        setStatus("搜尋中 0%", ui::Tone::Warn);
         refreshLabels();
     }
 
@@ -431,77 +433,118 @@ private:
         scope_->setValue(g_ui.scope == SearchScope::Heap ? "Heap（一般建議）" : "主程式 + Heap", started);
         action_->setText(task.running() ? "取消搜尋" : (started ? "接著搜尋" : "開始搜尋"));
         results_->setValue(started ? std::to_string(task.engine().count()) + " 筆" : "—");
-        if (!statusShown_) {
-            status_->setValue(task.running() ? "搜尋中…" : (started ? "可以接著搜尋" : "先輸入目前看到的數值"));
-            statusShown_ = true;
-        }
+        if (statusText_.empty())
+            setStatus(task.running() ? "搜尋中…" : (started ? "在遊戲裡讓數值變化後，再接著搜尋" : "先輸入遊戲裡目前看到的數值"));
     }
 
-    bool statusShown_ = false;
+    void setStatus(const std::string &t, ui::Tone tone = ui::Tone::Ok) { statusText_ = t; statusTone_ = tone; }
 
-    tsl::elm::ListItem *status_ = nullptr, *type_ = nullptr, *cond_ = nullptr, *value_ = nullptr,
+    std::string statusText_;
+    ui::Tone statusTone_ = ui::Tone::Ok;
+
+    tsl::elm::ListItem *type_ = nullptr, *cond_ = nullptr, *value_ = nullptr,
                        *scope_ = nullptr, *action_ = nullptr, *results_ = nullptr;
     u32 tick_ = 0;
 };
 
-// ═══════════════ 首頁 ═══════════════
+// ═══════════════ 首頁（照示意圖：狀態條 → 分類膠囊 → 金手指列 → 更多功能） ═══════════════
 class GuiMain : public tsl::Gui {
 public:
     tsl::elm::Element *createUI() override {
         auto &s = session();
         std::string sub = s.hasGame() ? ("TID " + s.tid() + " · BID " + s.bid().substr(0, 8)) : "繁中金手指";
         auto frame = new tsl::elm::OverlayFrame("金手指", sub);
-        auto list = new tsl::elm::List();
+        list_ = new tsl::elm::List();
 
-        status_ = new tsl::elm::ListItem("狀態", statusLine());
-        list->addItem(status_);
+        list_->addItem(new ui::StatusBar(mainStatus));
 
         if (s.hasGame()) {
-            list->addItem(new tsl::elm::CategoryHeader("分類"));
-            for (int i = 0; i < kCategoryCount; ++i) {
-                const std::string name = kCategories[i];
-                cats_[i] = new tsl::elm::ListItem(name, "");
-                onA(cats_[i], [name]() { tsl::changeTo<GuiCheatList>(name); });
-                list->addItem(cats_[i]);
-            }
-
-            auto off = new tsl::elm::ListItem("全部關閉");
-            onA(off, []() { session().disableAll(); });
-            list->addItem(off);
-
-            list->addItem(new tsl::elm::CategoryHeader("找不到想要的碼？"));
-            auto online = new tsl::elm::ListItem("線上碼庫", "切換組合");
-            onA(online, []() { tsl::changeTo<GuiOnline>(); });
-            list->addItem(online);
-
-            auto adv = new tsl::elm::ListItem("進階搜尋", "記憶體數值");
-            onA(adv, []() { tsl::changeTo<GuiSearch>(); });
-            list->addItem(adv);
+            buildGameSection();
+        } else {
+            // 連不上或沒遊戲：給一個重新連線，成功後畫面會自動補上分類和金手指
+            retry_ = new tsl::elm::ListItem("重新連線");
+            onA(retry_, []() { session().close(); session().open(); });
+            list_->addItem(retry_);
         }
 
-        lastGen_ = 0;
-        update();
-        frame->setContent(list);
+        structureGen_ = s.structureGeneration();
+        frame->setContent(list_);
         return frame;
     }
 
     void update() override {
         auto &s = session();
-        if (s.generation() == lastGen_) return;   // 沒變就不動，避免每幀重算
-        lastGen_ = s.generation();
-        status_->setValue(statusLine());
-        if (!s.hasGame()) return;
-        for (int i = 0; i < kCategoryCount; ++i)
-            if (cats_[i]) {
-                const size_t n = s.countInCategory(kCategories[i]);
-                cats_[i]->setValue(std::to_string(n) + " 條", n == 0);
-            }
+        if (!chips_ && s.hasGame()) {          // 重新連線成功
+            if (retry_) { removeFocus(); list_->removeItem(retry_); retry_ = nullptr; }
+            buildGameSection();
+            structureGen_ = s.structureGeneration();
+            return;
+        }
+        // 碼的清單換了（載入新組合、搜尋產生新碼）才重建列；開關只是重畫，不用重建
+        if (chips_ && s.structureGeneration() != structureGen_) {
+            structureGen_ = s.structureGeneration();
+            rebuildRows();
+        }
     }
 
 private:
-    tsl::elm::ListItem *status_ = nullptr;
-    tsl::elm::ListItem *cats_[kCategoryCount] = {};
-    u32 lastGen_ = 0;
+    // 全部用附加的方式加入（List 是先插入再刪除，用附加才不會跟「重新連線」項目搶位置）
+    void buildGameSection() {
+        std::vector<std::string> cats(kCategories, kCategories + kCategoryCount);
+        chips_ = new ui::CategoryChips(cats,
+            [](const std::string &c) { return session().countInCategory(c); },
+            [this](const std::string &c) { category_ = c; rebuildRows(); });
+        list_->addItem(chips_);
+        addRows(false);
+
+        list_->addItem(new tsl::elm::CategoryHeader("更多"));
+        auto off = new tsl::elm::ListItem("全部關閉");
+        onA(off, []() { session().disableAll(); });
+        list_->addItem(off);
+
+        auto online = new tsl::elm::ListItem("線上碼庫", "切換組合");
+        onA(online, []() { tsl::changeTo<GuiOnline>(); });
+        list_->addItem(online);
+
+        auto adv = new tsl::elm::ListItem("進階搜尋", "記憶體數值");
+        onA(adv, []() { tsl::changeTo<GuiSearch>(); });
+        list_->addItem(adv);
+    }
+
+    static ui::CheatRow::State query(u32 id) {
+        for (const auto &c : session().cheats())
+            if (c.id == id) return {true, c.enabled, c.isMaster, c.zhName, c.name};
+        return {false, false, false, "", ""};
+    }
+
+    // 第一次建立用附加；之後重建要插在「狀態條、分類膠囊」後面（索引 2）
+    void addRows(bool insert) {
+        ssize_t index = insert ? kFirstRowIndex : -1;
+        for (const auto &c : session().cheats()) {
+            if (category_ != "全部" && c.category != category_) continue;
+            auto row = new ui::CheatRow(c.id, query, [](u32 id, bool on) { session().toggle(id, on); });
+            rows_.push_back(row);
+            list_->addItem(row, 0, index);
+            if (insert) ++index;
+        }
+    }
+
+    void rebuildRows() {
+        // 焦點在要刪掉的列上就先移開，避免指到已刪除的元件
+        auto *focused = getFocusedElement();
+        for (auto *r : rows_) if (r == focused) { removeFocus(); break; }
+        for (auto *r : rows_) list_->removeItem(r);
+        rows_.clear();
+        addRows(true);
+    }
+
+    tsl::elm::List *list_ = nullptr;
+    ui::CategoryChips *chips_ = nullptr;
+    std::vector<ui::CheatRow *> rows_;
+    tsl::elm::ListItem *retry_ = nullptr;
+    std::string category_ = "全部";
+    static constexpr ssize_t kFirstRowIndex = 2;
+    u32 structureGen_ = 0;
 };
 
 class CheatOverlay : public tsl::Overlay {

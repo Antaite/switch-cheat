@@ -54,6 +54,9 @@ public:
 
     // 每次碼有變動就 +1，畫面看到數字變了才重畫，不用每幀重算
     u32 generation() const { return gen_; }
+    // 碼的清單本身換掉（載入新組合、重新讀取）才 +1；只是開關不算
+    u32 structureGeneration() const { return structureGen_; }
+    Result lastError() const { return lastError_; }
 
     Result refresh();
     Result toggle(u32 id, bool wantOn);
@@ -87,6 +90,8 @@ private:
     Translator dict_;
     bool dictLoaded_ = false;
     u32 gen_ = 1;
+    u32 structureGen_ = 1;
+    Result lastError_ = 0;
 };
 
 CheatSession &session();

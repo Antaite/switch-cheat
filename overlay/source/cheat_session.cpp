@@ -70,7 +70,14 @@ Result CheatSession::open() {
         dict_.loadTsv(kDictPath);
         dictLoaded_ = true;
     }
-    Result rc = dmntchtInitialize();
+    // libtesla 只在 initServices() 期間開著 sm（服務管理員），其他時間要自己開關，
+    // 否則 smGetService("dmnt:cht") 一定失敗——第一版「無法連線」就是這個原因
+    Result rc = smInitialize();
+    if (R_SUCCEEDED(rc)) {
+        rc = dmntchtInitialize();
+        smExit();
+    }
+    lastError_ = rc;
     if (R_FAILED(rc)) return rc;
     open_ = true;
 
@@ -108,6 +115,7 @@ void CheatSession::close() {
 Result CheatSession::refresh() {
     cheats_.clear();
     bump();
+    ++structureGen_;
     if (!open_ || !hasGame_) return 0;
 
     u64 count = 0;
