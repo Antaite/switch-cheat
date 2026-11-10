@@ -63,3 +63,211 @@ Master Code	主碼
 Required	必開
 Infinite	無限
 Max	最大
+# ── 常見片語 ──
+Higher Attack	攻擊力提高	戰鬥
+High Attack	高攻擊力	戰鬥
+Max Attack	攻擊力最大	戰鬥
+Attack Multiplier	攻擊倍率	戰鬥
+Attack Up	攻擊提升	戰鬥
+Defense Up	防禦提升	戰鬥
+Max Defense	防禦最大	戰鬥
+Higher Defense	防禦力提高	戰鬥
+Infinite Lives	無限生命數	戰鬥
+Infinite Life	無限生命	戰鬥
+Infinite Shield	無限護盾	戰鬥
+Infinite Energy	無限能量	戰鬥
+Infinite Special	無限必殺	戰鬥
+Infinite Bombs	無限炸彈	戰鬥
+Infinite Arrows	無限箭矢	戰鬥
+Infinite Grenades	無限手榴彈	戰鬥
+Infinite Potions	無限藥水	道具
+Infinite Skill Points	無限技能點	戰鬥
+Max Skill Points	技能點最大	戰鬥
+Skill Points	技能點	戰鬥
+Ability Points	能力點	戰鬥
+Stat Points	屬性點	戰鬥
+Instant Kill	瞬間擊殺	戰鬥
+Enemies Die Instantly	敵人瞬間死亡	戰鬥
+Easy Kill	輕鬆擊殺	戰鬥
+No Cooldown	無冷卻	戰鬥
+Fast Charge	快速蓄力	戰鬥
+Critical Hit	爆擊	戰鬥
+Always Critical	必定爆擊	戰鬥
+Infinite Combo	無限連擊	戰鬥
+Max Stats	能力值最大	戰鬥
+All Stats	全能力值	戰鬥
+Infinite Gems	無限寶石	金錢
+Max Gems	寶石最大	金錢
+Infinite Souls	無限靈魂	金錢
+Infinite Crystals	無限水晶	金錢
+Infinite Points	無限點數	金錢
+Infinite Currency	無限貨幣	金錢
+Infinite Resources	無限資源	道具
+Infinite Materials	無限材料	道具
+Max Materials	材料最大	道具
+Infinite Keys	無限鑰匙	道具
+All Weapons	全武器	道具
+All Characters	全角色	道具
+All Costumes	全服裝	道具
+All Skills	全技能	道具
+All Levels	全關卡	道具
+All Stages	全關卡	道具
+Free Shopping	購物免費	金錢
+Free Purchase	免費購買	金錢
+Free Craft	免費製作	道具
+Instant Craft	瞬間製作	道具
+Max Score	分數最大	其他
+Score Multiplier	分數倍率	其他
+Infinite Fuel	無限燃料	移動
+Infinite Oxygen	無限氧氣	移動
+Infinite Boost	無限加速	移動
+Infinite Dash	無限衝刺	移動
+Infinite Double Jump	無限二段跳	移動
+Super Jump	超級跳	移動
+High Jump	高跳	移動
+Fast Run	快速奔跑	移動
+Fast Walk	快速行走	移動
+Low Gravity	低重力	移動
+No Clip	穿牆	移動
+Time Stop	時間停止	其他
+Freeze Time	時間暫停	其他
+Never Die	不會死亡	戰鬥
+Never Lose	不會輸	戰鬥
+Win Instantly	直接獲勝	戰鬥
+Instant Win	直接獲勝	戰鬥
+Drop Rate	掉寶率	道具
+Rare Drop	稀有掉落	道具
+Gold Multiplier	金幣倍率	金錢
+Money Multiplier	金錢倍率	金錢
+Speed Multiplier	速度倍率	移動
+Game Speed	遊戲速度	其他
+Disable Motion Blur	關閉動態模糊	畫面
+Motion Blur	動態模糊	畫面
+Depth of Field	景深	畫面
+Anti Aliasing	反鋸齒	畫面
+Field of View	視野	畫面
+FOV	視野	畫面
+Docked	TV 模式	畫面
+Handheld	掌機模式	畫面
+# ── 常見單字（片語沒對到時逐字翻） ──
+Attack	攻擊	戰鬥
+Defense	防禦	戰鬥
+Defence	防禦	戰鬥
+Health	血量	戰鬥
+HP	血量	戰鬥
+MP	魔力	戰鬥
+SP	技能值	戰鬥
+Mana	魔力	戰鬥
+Stamina	體力	戰鬥
+Energy	能量	戰鬥
+Shield	護盾	戰鬥
+Damage	傷害	戰鬥
+Strength	力量	戰鬥
+Power	力量	戰鬥
+Magic	魔法	戰鬥
+Luck	幸運	戰鬥
+Agility	敏捷	戰鬥
+Ammo	彈藥	戰鬥
+Bullets	子彈	戰鬥
+Weapon	武器	道具
+Weapons	武器	道具
+Armor	防具	道具
+Armour	防具	道具
+Enemy	敵人	戰鬥
+Enemies	敵人	戰鬥
+Boss	頭目	戰鬥
+Kill	擊殺	戰鬥
+Kills	擊殺數	戰鬥
+Combo	連擊	戰鬥
+Skill	技能	戰鬥
+Skills	技能	戰鬥
+Level	等級	戰鬥
+Levels	等級	戰鬥
+EXP	經驗值	戰鬥
+XP	經驗值	戰鬥
+Experience	經驗值	戰鬥
+Lives	生命數	戰鬥
+Life	生命	戰鬥
+Item	道具	道具
+Items	道具	道具
+Potion	藥水	道具
+Potions	藥水	道具
+Material	材料	道具
+Materials	材料	道具
+Resources	資源	道具
+Inventory	背包	道具
+Key	鑰匙	道具
+Keys	鑰匙	道具
+Durability	耐久度	道具
+Gems	寶石	金錢
+Gem	寶石	金錢
+Diamonds	鑽石	金錢
+Crystals	水晶	金錢
+Souls	靈魂	金錢
+Points	點數	金錢
+Currency	貨幣	金錢
+Cash	現金	金錢
+Ticket	票券	金錢
+Tickets	票券	金錢
+Medals	獎牌	金錢
+Score	分數	其他
+Speed	速度	移動
+Jump	跳躍	移動
+Dash	衝刺	移動
+Fly	飛行	移動
+Gravity	重力	移動
+Character	角色	道具
+Characters	角色	道具
+Costume	服裝	道具
+Costumes	服裝	道具
+Shop	商店	金錢
+Buy	購買	金錢
+Sell	賣出	金錢
+Price	價格	金錢
+Free	免費	金錢
+Time	時間	其他
+Stage	關卡	其他
+Mission	任務	其他
+Quest	任務	其他
+Graphics	畫質	畫面
+Camera	鏡頭	畫面
+Shadows	陰影	畫面
+Fog	霧	畫面
+Bloom	光暈	畫面
+Sharpen	銳利化	畫面
+Unlock	解鎖	道具
+Unlocked	已解鎖	道具
+All	全部	
+Instant	瞬間	
+Instantly	瞬間	
+Always	永遠	
+Never	不會	
+No	無	
+Unlimited	無限	
+Infinity	無限	
+Higher	提高	
+Lower	降低	
+High	高	
+Low	低	
+Fast	快速	
+Faster	更快	
+Slow	慢速	
+Multiplier	倍率	
+Get	獲得	
+Have	擁有	
+Set	設定	
+Change	修改	
+Modifier	修改器	
+Hack	修改	
+Mod	修改	
+Fix	修正	
+Activate	啟用	
+Toggle	切換	
+On	開	
+Off	關	
+Only	僅	
+Mode	模式	
+Player	玩家	
+Party	隊伍	
+Team	隊伍	
+Member	隊員	

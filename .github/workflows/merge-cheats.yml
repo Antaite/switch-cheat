@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: 安裝簡轉繁套件（OpenCC）
+        run: pip install --quiet opencc-python-reimplemented
+
       - name: 測試
         working-directory: tools
         run: python -m unittest tests/test_merge.py

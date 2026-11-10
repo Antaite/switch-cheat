@@ -33,8 +33,10 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: 取得 libtesla
-        run: git clone --depth 1 https://github.com/WerWolv/libtesla overlay/libs/libtesla
+      - name: 取得 libtesla 並修改字型載入（非中文系統也載入繁中字型）
+        run: |
+          git clone --depth 1 https://github.com/WerWolv/libtesla overlay/libs/libtesla
+          python3 overlay/patch_libtesla.py overlay/libs/libtesla/include/tesla.hpp
 
       - name: 編譯
         working-directory: overlay

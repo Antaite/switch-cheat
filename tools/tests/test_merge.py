@@ -88,6 +88,19 @@ class MergeTest(unittest.TestCase):
         self.assertEqual(len(cheats), 5)
         self.assertEqual(warns, [])
 
+    def test_decode_gbk_and_s2t(self):
+        gbk = "[无限金钱]\n040A0000 01234567 0000270F\n".encode("gbk")
+        text = mc.decode(gbk)
+        self.assertIn("无限金钱", text)
+        self.assertEqual(mc.decode(b"[A]\n"), "[A]\n")           # 沒 BOM 不能被當成 UTF-16
+        tr = mc.Translator(HERE.parent.parent / "data/translations/zh_TW.tsv",
+                           mc.S2T(HERE.parent.parent / "data/s2t_chars.tsv"))
+        self.assertEqual(tr.translate("无限金钱")[0], "無限金錢")
+        self.assertEqual(tr.translate("Higher Attack")[0], "攻擊力提高")
+
+    def test_title_file(self):
+        self.assertEqual((self.dist / "db" / E / "title.txt").read_text(encoding="utf-8").strip(), "範例遊戲丙（titledb）")
+
     def test_refuses_foreign_out_dir(self):
         foreign = self.tmp / "foreign"
         foreign.mkdir()

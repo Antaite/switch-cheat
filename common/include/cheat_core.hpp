@@ -46,6 +46,13 @@ private:
     std::vector<DictEntry> entries_; // 依英文長度由長到短排序，長詞優先
 };
 
+// 文字處理
+// fixEncoding：不是合法 UTF-8 時，當成 GBK（簡體中文常見的舊編碼）轉成 UTF-8；還是不行就去掉壞掉的位元組
+std::string fixEncoding(const std::string &s);
+// toTraditional：簡體字轉台灣繁體（OpenCC 單字表）
+std::string toTraditional(const std::string &s);
+bool isValidUtf8(const std::string &s);
+
 // main_nso_build_id 前 8 bytes 轉成 16 碼大寫十六進位（大氣層檔名用）
 std::string buildIdToHex(const uint8_t *buildId);
 std::string titleIdToHex(uint64_t titleId);

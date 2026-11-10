@@ -114,18 +114,55 @@ def to_cheat_text(master: Cheat | None, cheats: list[Cheat]) -> str:
 
 
 def decode(data: bytes) -> str:
-    for enc in ("utf-8-sig", "utf-16"):
+    """金手指檔的編碼很雜：UTF-8 為主，舊的簡體碼常是 GBK，繁體偶爾是 Big5。
+    UTF-16 只在有 BOM 時才用（沒 BOM 的話任何偶數長度的資料都能「解」成亂碼）。"""
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        try:
+            return data.decode("utf-16")
+        except UnicodeDecodeError:
+            pass
+    for enc in ("utf-8-sig", "gb18030", "big5", "shift_jis"):
         try:
             return data.decode(enc)
         except UnicodeDecodeError:
             pass
-    return data.decode("latin-1")
+    return data.decode("utf-8", errors="replace")
+
+
+class S2T:
+    """簡轉繁：有 opencc 套件就用片語級的 s2twp（台灣用語），沒有就用 data/s2t_chars.tsv 單字表"""
+
+    def __init__(self, table: Path):
+        self.cc = None
+        try:
+            import opencc  # type: ignore
+            self.cc = opencc.OpenCC("s2twp")
+        except Exception:
+            self.cc = None
+        self.map = {}
+        if self.cc is None and table.exists():
+            for line in table.read_text(encoding="utf-8").splitlines():
+                if "\t" in line:
+                    a, b = line.split("\t", 1)
+                    self.map[a] = b
+
+    @property
+    def mode(self) -> str:
+        return "opencc s2twp" if self.cc else f"單字表（{len(self.map)} 字）"
+
+    def __call__(self, s: str) -> str:
+        if not any("\u2e80" <= ch for ch in s):
+            return s
+        if self.cc:
+            return self.cc.convert(s)
+        return "".join(self.map.get(ch, ch) for ch in s)
 
 
 # ───────────────────────── 翻譯 ─────────────────────────
 
 class Translator:
-    def __init__(self, tsv: Path | None):
+    def __init__(self, tsv: Path | None, s2t: "S2T | None" = None):
+        self.s2t = s2t
         self.entries: list[tuple[re.Pattern, str, str]] = []
         if tsv and tsv.exists():
             rows = []
@@ -151,6 +188,8 @@ class Translator:
                     category = cat
         result = re.sub(r"\x00(\d+)\x00", lambda m: slots[int(m.group(1))], result)
         result = re.sub(r"(?<=[^\x00-\x7F]) (?=[^\x00-\x7F])", "", result)   # 收掉中文之間的空白
+        if self.s2t:
+            result = self.s2t(result)
         return result, category or "其他"
 
 
@@ -334,7 +373,9 @@ def main(argv=None) -> int:
 
     cfg = json.loads(args.sources.read_text(encoding="utf-8"))
     sources = [s for s in cfg["sources"] if s.get("enabled", True) and (not args.only or s["id"] in args.only)]
-    translator = Translator(args.dict)
+    s2t = S2T(here.parent / "data/s2t_chars.tsv")
+    translator = Translator(args.dict, s2t)
+    print(f"[簡轉繁] {s2t.mode}")
     zh_names, en_names = load_titles(args.titles, args.titledb)
     args.cache.mkdir(parents=True, exist_ok=True)
     if args.out.exists():
@@ -419,6 +460,9 @@ def main(argv=None) -> int:
             stats["duplicates"] += sum(len(c.sources) - 1 for c in g.cheats)
 
         (tdir / f"{bid}.meta.tsv").write_text("\n".join(meta_lines) + "\n", encoding="utf-8")
+        title_name = zh_names.get(tid) or en_names.get(tid)
+        if title_name:
+            (tdir / "title.txt").write_text(s2t(title_name) + "\n", encoding="utf-8")   # overlay 顯示遊戲名稱用
         detail[bid] = files
         t = index["titles"].setdefault(tid, {"name": zh_names.get(tid, ""), "name_en": en_names.get(tid, ""),
                                             "builds": {}})
