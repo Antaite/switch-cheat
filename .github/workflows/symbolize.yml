@@ -1,0 +1,38 @@
+# 當機分析：把當機畫面上的位址（PC、BT 減掉 Start Address）對回原始碼的函式與行號
+name: 當機位址分析
+
+on:
+  workflow_dispatch:
+    inputs:
+      offsets:
+        description: "位址偏移（PC − Start Address），空白分隔，例如 0x1057B4 0x1940"
+        required: true
+
+jobs:
+  symbolize:
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64:latest
+    steps:
+      - name: 安裝工具
+        run: |
+          apt-get update -qq && apt-get install -y -qq git > /dev/null
+          dkp-pacman -S --noconfirm --needed switch-curl switch-mbedtls switch-zlib
+      - uses: actions/checkout@v4
+      - name: 取得 libtesla 並修改字型
+        run: |
+          git clone --depth 1 https://github.com/WerWolv/libtesla overlay/libs/libtesla
+          python3 overlay/patch_libtesla.py overlay/libs/libtesla/include/tesla.hpp
+      - name: 編譯
+        working-directory: overlay
+        run: make -j$(nproc)
+      - name: 對照位址
+        working-directory: overlay
+        run: |
+          for a in ${{ github.event.inputs.offsets }}; do
+            echo "== $a"
+            $DEVKITPRO/devkitA64/bin/aarch64-none-elf-addr2line -f -C -i -p -e CheatTW.elf $a
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CheatTW-elf
+          path: overlay/CheatTW.elf
