@@ -192,4 +192,90 @@ private:
     std::string cacheZh_, shownZh_, shownEn_;
 };
 
+// ───────── 說明框：固定在畫面下方，跟著游標顯示目前選項的說明 ─────────
+class HelpBox : public tsl::elm::Element {
+public:
+    using Provider = std::function<std::string()>;
+    explicit HelpBox(Provider p) : provider_(std::move(p)) {}
+
+    void draw(Renderer *r) override {
+        const std::string text = provider_();
+        if (text != cacheText_ || getWidth() != cacheWidth_) {   // 換行結果快取，文字沒變就不重算
+            cacheText_ = text;
+            cacheWidth_ = getWidth();
+            lines_ = wrap(r, text, getWidth() - 28, kFont);
+        }
+        r->drawRect(getX(), getY() + 6, getWidth(), 1, a(kLine));
+        r->drawString("說明", false, getX() + 4, getY() + 28, 15, a(kAccent));
+        s32 y = getY() + 52;
+        for (const auto &line : lines_) {
+            if (y > getBottomBound() - 4) break;
+            r->drawString(line.c_str(), false, getX() + 4, y, kFont, a(kSub));
+            y += kLineH;
+        }
+    }
+    // 大小由外層 SplitView 決定，這裡不改
+    void layout(u16, u16, u16, u16) override {}
+
+private:
+    static constexpr float kFont = 17;
+    static constexpr s32 kLineH = 24;
+
+    // 一個字一個字量寬度，超過就換行（中文沒有空白，不能用空白斷行）
+    static std::vector<std::string> wrap(Renderer *r, const std::string &text, s32 maxW, float size) {
+        std::vector<std::string> out;
+        std::string line;
+        size_t i = 0;
+        while (i < text.size()) {
+            size_t n = 1;
+            const unsigned char c = (unsigned char)text[i];
+            if (c >= 0xF0) n = 4; else if (c >= 0xE0) n = 3; else if (c >= 0xC0) n = 2;
+            const std::string ch = text.substr(i, n);
+            i += n;
+            if (ch == "\n") { out.push_back(line); line.clear(); continue; }
+            if (!line.empty() && (s32)textWidth(r, line + ch, size) > maxW) { out.push_back(line); line.clear(); }
+            line += ch;
+        }
+        if (!line.empty()) out.push_back(line);
+        return out;
+    }
+
+    Provider provider_;
+    std::string cacheText_;
+    u16 cacheWidth_ = 0;
+    std::vector<std::string> lines_;
+};
+
+// ───────── 上下分割：上面是可捲動的列表，下面固定一塊（說明框） ─────────
+class SplitView : public tsl::elm::Element {
+public:
+    SplitView(tsl::elm::Element *top, tsl::elm::Element *bottom, u16 bottomHeight)
+        : top_(top), bottom_(bottom), bottomH_(bottomHeight) {
+        top_->setParent(this);
+        bottom_->setParent(this);
+    }
+    ~SplitView() override { delete top_; delete bottom_; }
+
+    void draw(Renderer *r) override {
+        top_->frame(r);
+        bottom_->frame(r);
+    }
+    void layout(u16, u16, u16, u16) override {
+        top_->setBoundaries(getX(), getY(), getWidth(), getHeight() - bottomH_);
+        top_->invalidate();
+        bottom_->setBoundaries(getX(), getY() + getHeight() - bottomH_, getWidth(), bottomH_);
+        bottom_->invalidate();
+    }
+    tsl::elm::Element *requestFocus(tsl::elm::Element *old, tsl::FocusDirection d) override {
+        return top_->requestFocus(old, d);
+    }
+    bool onTouch(tsl::elm::TouchEvent e, s32 cx, s32 cy, s32 px, s32 py, s32 ix, s32 iy) override {
+        return top_->onTouch(e, cx, cy, px, py, ix, iy);
+    }
+
+private:
+    tsl::elm::Element *top_, *bottom_;
+    u16 bottomH_;
+};
+
 } // namespace ui

@@ -50,6 +50,8 @@ public:
     bool hasGame() const { return hasGame_; }
     const std::string &tid() const { return tid_; }
     const std::string &bid() const { return bid_; }
+    // 線上碼庫下載的遊戲中文名（db/{TID}/title.txt），沒有就是空字串
+    std::string gameTitle() const;
     const Extents &extents() const { return ext_; }
 
     // 每次碼有變動就 +1，畫面看到數字變了才重畫，不用每幀重算

@@ -32,7 +32,8 @@ CXXFLAGS := $(CFLAGS) -fno-exceptions -std=c++20
 ASFLAGS  := -g $(ARCH)
 LDFLAGS   = -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS     := -lnx
+# curl（含 TLS）由 portlibs 提供：dkp-pacman -S switch-curl
+LIBS     := $(shell $(DEVKITPRO)/portlibs/switch/bin/aarch64-none-elf-pkg-config --libs libcurl 2>/dev/null || echo -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz) -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX)
 
 #---------------------------------------------------------------------------------

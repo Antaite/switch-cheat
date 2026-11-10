@@ -162,6 +162,18 @@ void CheatSession::disableAll() {
     bump();
 }
 
+std::string CheatSession::gameTitle() const {
+    if (!hasGame_) return "";
+    std::string t;
+    if (FILE *f = std::fopen((std::string(kDbDir) + "/" + tid_ + "/title.txt").c_str(), "r")) {
+        char line[128];
+        if (std::fgets(line, sizeof(line), f)) t = line;
+        std::fclose(f);
+    }
+    while (!t.empty() && (t.back() == '\n' || t.back() == '\r')) t.pop_back();
+    return t;
+}
+
 size_t CheatSession::enabledCount() const {
     return std::count_if(cheats_.begin(), cheats_.end(),
         [](const LiveCheat &c) { return c.enabled && !c.isMaster; });

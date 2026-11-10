@@ -29,7 +29,9 @@ jobs:
     container: devkitpro/devkita64:latest
     steps:
       - name: 安裝工具
-        run: apt-get update -qq && apt-get install -y -qq git zip > /dev/null
+        run: |
+          apt-get update -qq && apt-get install -y -qq git zip > /dev/null
+          dkp-pacman -S --noconfirm --needed switch-curl switch-mbedtls switch-zlib
 
       - uses: actions/checkout@v4
 
