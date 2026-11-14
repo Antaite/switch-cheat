@@ -1,0 +1,6 @@
+[Obtain 1x Exp]
+04000000
+
+[Open Skill Window to Gain 999 Skill points (on)]
+04000000 04000000 04000000
+04000000 04000000

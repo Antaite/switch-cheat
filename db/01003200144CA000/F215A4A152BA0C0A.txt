@@ -1,0 +1,8 @@
+[Inf.Credits]
+01100000 C0A3948A 00000099
+
+[Inf.Lives]
+01100000 C0A3A7D8 00000009
+
+[Original Code by ネオ•グランゾン]
+20000000

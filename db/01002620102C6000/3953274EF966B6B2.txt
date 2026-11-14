@@ -1,0 +1,5 @@
+[1p invicible]
+04000000 0064F1AC 1E27D001
+
+[1p invicible off]
+04000000 0064F1AC 1E2C1001

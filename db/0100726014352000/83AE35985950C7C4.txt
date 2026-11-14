@@ -1,0 +1,12 @@
+{Master Code (include shared functions)}
+040E0000 00196610 1400000B
+
+[Restore Code (Use after unchecking any cheats below)]
+040E0000 00196610 36000140
+040E0000 00196610 1400000B
+
+[60 FPS]
+04000000 043DA204 00000001
+
+[30 FPS (Default)]
+04000000 043DA204 00000002
