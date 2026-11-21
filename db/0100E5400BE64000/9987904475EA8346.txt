@@ -1,0 +1,20 @@
+[Begin With Invincibility [hamlet]]
+01000000 00847538 00000029
+
+[Max Missiles on Pick Up [hamlet]]
+01000000 008483A5 0000000D
+
+[Max Pod Power on Pick Up]
+01000000 008483D5 0000000D
+
+[Max Bits on Pick Up [hamlet]]
+01000000 008483C5 00000009
+
+[Begin With Invincibility [ibnux]]
+01000000 001A3BF8 00000029
+
+[Max Bits on Pick Up [ibnux]]
+01000000 008483C5
+
+[Max Missiles on Pick Up [ibnux]]
+01000000 001A4A65 0000000D
