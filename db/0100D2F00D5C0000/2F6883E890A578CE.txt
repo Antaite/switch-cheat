@@ -1,0 +1,8 @@
+[Hold Down L And ZR Or R And ZR Wile Pressing Confirm.]
+00000000 00000000
+
+[--SectionStart:Global & Progression Cheats--]
+20000000
+
+[--SectionEnd:Global & Progression Cheats--]
+20000001
